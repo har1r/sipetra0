@@ -1,0 +1,9 @@
+{
+  "routes": [
+    {
+      "src": "/((?!.*\\.(?:js|css|png|jpg|jpeg|svg|ico|webp|json|txt|map|woff|woff2|ttf|eot)).*)",
+      "dest": "/index.html"
+    }
+  ]
+}
+
