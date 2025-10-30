@@ -24,7 +24,7 @@ const UserProvider = ({ children }) => {
     sessionStorage.removeItem(USER_CACHE_KEY);
   }, []);
 
-  //Simpan juga user ke sessionStorage biar masih ada cache sementara.
+  //save also user into the sessionStorage so that there is still temporary cache.
   const updateUser = useCallback((userData) => {
     if (!userData) return;
     setUser(userData);
@@ -34,9 +34,9 @@ const UserProvider = ({ children }) => {
     );
   }, []);
 
-  //Aplikasi pertama kali dibuka (cek apakah user masih login).
-  //User melakukan refresh halaman.
-  //Perlu memastikan data profil terbaru dari server.
+  // Application first get opened (check wether user is still logged in or not.
+  // User refresh the page.
+  // Need to verfiy new profile data from server.
   const refreshUser = useCallback(
     async (signal) => {
       const token = localStorage.getItem("token");
@@ -72,7 +72,7 @@ const UserProvider = ({ children }) => {
   );
 
   useEffect(() => {
-    const ctrl = new AbortController(); //API bawaan JavaScript yang dipakai untuk membatalkan (cancel) operasi async, biasanya HTTP request.
+    const ctrl = new AbortController(); // Built-in JavaScript API that is used to cancel async operation, usually HTTP request.
 
     const bootstrap = async () => {
       const token = localStorage.getItem("token");
@@ -95,7 +95,7 @@ const UserProvider = ({ children }) => {
 
     const onStorage = (e) => {
       if (e.key === "token") {
-        const hasToken = !!localStorage.getItem("token"); //Tanda !! dipakai untuk mengubah suatu nilai jadi boolean murni (true atau false).
+        const hasToken = !!localStorage.getItem("token"); // Mark !! dipakai untuk mengubah suatu nilai jadi boolean murni (true atau false).
         if (!hasToken) clearUser();
         else refreshUser(ctrl.signal);
       }

@@ -19,7 +19,9 @@ const highlight = (text = "", q = "") => {
   return (
     <>
       {source.slice(0, idx)}
-      <mark className="bg-yellow-200 px-0.5 rounded">{source.slice(idx, idx + q.length)}</mark>
+      <mark className="bg-yellow-200 px-0.5 rounded">
+        {source.slice(idx, idx + q.length)}
+      </mark>
       {source.slice(idx + q.length)}
     </>
   );
@@ -42,7 +44,10 @@ const TaskListTable = ({
   searchNopel = "",
   onSearchNopel,
 }) => {
-  const rows = useMemo(() => (Array.isArray(tableData) ? tableData : []), [tableData]);
+  const rows = useMemo(
+    () => (Array.isArray(tableData) ? tableData : []),
+    [tableData]
+  );
   const offset = (Number(page) - 1) * Number(limit);
   const [localQuery, setLocalQuery] = useState(searchNopel ?? "");
 
@@ -101,18 +106,35 @@ const TaskListTable = ({
           {rows.map((task, idx) => {
             const nopel = task?.mainData?.nopel ?? "-";
             return (
-              <tr key={task?._id || `${offset}-${idx}`} className="transition-colors hover:bg-indigo-50/40">
+              <tr
+                key={task?._id || `${offset}-${idx}`}
+                className="transition-colors hover:bg-indigo-50/40"
+              >
                 <td className="border-b px-3 py-2">{offset + idx + 1}</td>
-                <td className="border-b px-3 py-2">{task?.createdAt ? DF_ID.format(new Date(task.createdAt)) : "-"}</td>
-                <td className="border-b px-3 py-2">{highlight(nopel, searchNopel)}</td>
-                <td className="border-b px-3 py-2">{task?.mainData?.nop ?? "-"}</td>
                 <td className="border-b px-3 py-2">
-                  <div className="max-w-[220px] truncate" title={getNewName(task)}>
+                  {task?.createdAt
+                    ? DF_ID.format(new Date(task.createdAt))
+                    : "-"}
+                </td>
+                <td className="border-b px-3 py-2">
+                  {highlight(nopel, searchNopel)}
+                </td>
+                <td className="border-b px-3 py-2">
+                  {task?.mainData?.nop ?? "-"}
+                </td>
+                <td className="border-b px-3 py-2">
+                  <div
+                    className="max-w-[220px] truncate"
+                    title={getNewName(task)}
+                  >
                     {getNewName(task)}
                   </div>
                 </td>
                 <td className="border-b px-3 py-2 capitalize">
-                  <div className="max-w-[260px] truncate" title={task?.title || ""}>
+                  <div
+                    className="max-w-[260px] truncate"
+                    title={task?.title || ""}
+                  >
                     {task?.title || ""}
                   </div>
                 </td>
@@ -130,7 +152,7 @@ const TaskListTable = ({
               </tr>
             );
           })}
-{/* 
+          {/* 
           {loading &&
             Array.from({ length: Math.max(3, 5 - rows.length) }).map((_, i) => (
               <tr key={`skeleton-${i}`} className="[&>td]:border-b">
@@ -148,4 +170,3 @@ const TaskListTable = ({
 };
 
 export default React.memo(TaskListTable);
-

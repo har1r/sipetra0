@@ -1,5 +1,6 @@
 import React, { useContext, useMemo, useCallback, Fragment } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+
 import { UserContext } from "../../context/UserContexts";
 import { ADMIN_MENU, USER_MENU } from "../../utils/data";
 
@@ -74,7 +75,10 @@ const SideMenu = ({ isMobile = false, onClose }) => {
       {/* User Card */}
       <div className="flex flex-col items-center justify-center px-5 pt-6 pb-5 border-b border-slate-200/60 bg-gradient-to-b from-white to-slate-50/40">
         <div className="relative">
-          <div className="absolute inset-0 rounded-full bg-indigo-400/20 blur-md" aria-hidden />
+          <div
+            className="absolute inset-0 rounded-full bg-indigo-400/20 blur-md"
+            aria-hidden
+          />
           {user.profileImageUrl ? (
             <img
               src={user.profileImageUrl}
@@ -99,7 +103,9 @@ const SideMenu = ({ isMobile = false, onClose }) => {
         <h5 className="mt-2 line-clamp-1 text-base font-semibold text-slate-900">
           {user.name}
         </h5>
-        <p className="max-w-[200px] truncate text-[12px] text-slate-500">{user.email}</p>
+        <p className="max-w-[200px] truncate text-[12px] text-slate-500">
+          {user.email}
+        </p>
       </div>
 
       {/* Menu List */}
@@ -130,7 +136,9 @@ const SideMenu = ({ isMobile = false, onClose }) => {
                     aria-hidden
                     className={[
                       "absolute left-0 top-0 h-full w-1 rounded-r-md transition-all duration-200",
-                      isActive ? "bg-indigo-600" : "bg-transparent group-hover:bg-indigo-200",
+                      isActive
+                        ? "bg-indigo-600"
+                        : "bg-transparent group-hover:bg-indigo-200",
                     ].join(" ")}
                   />
 
@@ -138,7 +146,9 @@ const SideMenu = ({ isMobile = false, onClose }) => {
                     <item.icon
                       className={[
                         "text-[20px]",
-                        isActive ? "text-indigo-600" : "text-slate-500 group-hover:text-slate-700",
+                        isActive
+                          ? "text-indigo-600"
+                          : "text-slate-500 group-hover:text-slate-700",
                       ].join(" ")}
                       aria-hidden
                     />
@@ -157,7 +167,10 @@ const SideMenu = ({ isMobile = false, onClose }) => {
   // ============================ Render modes ============================
   if (isMobile) {
     return (
-      <aside id="mobile-sidebar" className="h-full w-64 bg-white border-r border-slate-200/70 shadow-lg">
+      <aside
+        id="mobile-sidebar"
+        className="h-full w-64 bg-white border-r border-slate-200/70 shadow-lg"
+      >
         {MenuInner}
       </aside>
     );

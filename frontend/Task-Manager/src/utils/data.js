@@ -122,7 +122,9 @@ export const SUBDISTRICT_OPTIONS = [
 ];
 
 export const TITLE_OPTIONS = [
-  { label: "Mutasi Habis", value: "Mutasi Habis" },
+  { label: "Pengaktifan", value: "Pengaktifan" },
+  { label: "Mutasi Habis Update", value: "Mutasi Habis Update" },
+  { label: "Mutasi Habis Reguler", value: "Mutasi Habis Reguler" },
   { label: "Mutasi Sebagian", value: "Mutasi Sebagian" },
   { label: "Pembetulan", value: "Pembetulan" },
   { label: "Objek Pajak Baru", value: "Objek Pajak Baru" },
