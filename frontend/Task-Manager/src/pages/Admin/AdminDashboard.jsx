@@ -13,16 +13,6 @@ import { LuArrowRight } from "react-icons/lu";
 
 import DashboardLayout from "../../components/layouts/DashboardLayout";
 import InfoCard from "../../components/cards/InfoCard";
-const CustomBarChart = React.lazy(() =>
-  import("../../components/charts/CustomBarChart")
-);
-const CustomGraphChart = React.lazy(() =>
-  import("../../components/charts/CustomGraphChart")
-);
-const TaskListTable = React.lazy(() =>
-  import("../../components/tabels/TaskListTable")
-);
-
 import CardSkeleton from "../../components/Skeletons/CardSkeleton";
 import TableSkeleton from "../../components/Skeletons/TableSkeleton";
 import Pagination from "../../components/ui/Pagination";
@@ -33,164 +23,152 @@ import { API_PATHS } from "../../utils/apiPaths";
 import axiosInstance from "../../utils/axiosInstance";
 import { formatDateId } from "../../utils/formatDateId";
 
-// =============================
-// Constants & Helpers
-// =============================
+const CustomBarChart = React.lazy(() =>
+  import("../../components/charts/CustomBarChart")
+);
+const CustomGraphChart = React.lazy(() =>
+  import("../../components/charts/CustomGraphChart")
+);
+const TaskListTable = React.lazy(() =>
+  import("../../components/tabels/TaskListTable")
+);
+
+// ======================================
+// Helpers
+// ======================================
 const CHART_COLORS = ["#8D51FF", "#00B8DB", "#7BCE08", "#FFBB28", "#FF1F57"];
 
-const transformObjectToChartData = (obj) =>
+const transformToChartData = (obj) =>
   obj ? Object.entries(obj).map(([label, count]) => ({ label, count })) : [];
 
-// =============================
-// Komponen Dashboard (Admin)
-// =============================
+// ======================================
+// Main Component
+// ======================================
 const Dashboard = () => {
   UseUserAuth();
   const { user } = useContext(UserContext);
   const navigate = useNavigate();
 
-  // =============================
+  // ======================================
   // States
-  // =============================
+  // ======================================
   const [dashboardData, setDashboardData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [searchNopel, setSearchNopel] = useState("");
-  const [selectedYear, setSelectedYear] = useState("");
-
-  const recordLimit = 5;
+  const [page, setPage] = useState(1);
+  const [searchTerm, setSearchTerm] = useState("");
+  const currentYear = new Date().getFullYear();
+  const [yearFilter, setYearFilter] = useState(currentYear); // langsung tahun sekarang
   const abortControllerRef = useRef(null);
 
-  const formattedToday = useMemo(
+  const recordLimit = 5;
+  const todayLabel = useMemo(
     () => formatDateId(new Date(), { withWeekday: true }),
     []
   );
 
   const availableYears = useMemo(() => {
-    const currentYear = new Date().getFullYear();
-    return Array.from({ length: 5 }, (_, i) => currentYear - i);
-  }, []);
+    return Array.from({ length: 3 }, (_, i) => currentYear - i);
+  }, [currentYear]);
 
-  // =============================
-  // Data Extraction
-  // =============================
+  // ======================================
+  // Derived Data
+  // ======================================
   const {
-    statsSummary,
-    overdueTasks,
-    totalOverdueTasks,
-    weeklyStatistics,
-    responsePage,
-    responseLimit,
-    totalPages,
-  } = useMemo(() => {
-    const statsSummary = dashboardData?.stats ?? {};
-    const overdueTasks = dashboardData?.overdueTasks ?? [];
-    const totalOverdueTasks = dashboardData?.overdueTotal ?? 0;
-    const weeklyStatistics = dashboardData?.weeklyStats ?? [];
+    stats = {},
+    overdueTasks = [],
+    overdueTotal = 0,
+    weeklyStats = [],
+  } = dashboardData || {};
 
-    const responsePage = Number(dashboardData?.page ?? currentPage);
-    const responseLimit = Number(dashboardData?.limit ?? recordLimit);
-    const currentRows = overdueTasks.length;
+  const totalPages = useMemo(
+    () => Math.ceil(overdueTotal / recordLimit) || 1,
+    [overdueTotal, recordLimit]
+  );
 
-    const totalPages =
-      totalOverdueTasks > 0
-        ? Math.ceil(totalOverdueTasks / responseLimit)
-        : responsePage + (currentRows === responseLimit ? 1 : 0);
-
-    return {
-      statsSummary,
-      overdueTasks,
-      totalOverdueTasks,
-      weeklyStatistics,
-      responsePage,
-      responseLimit,
-      totalPages,
-    };
-  }, [dashboardData, currentPage, recordLimit]);
-
-  const handleSeeMore = useCallback(() => navigate("/admin/tasks"), [navigate]);
-
-  // =============================
-  // Fetch Dashboard Data
-  // =============================
+  // ======================================
+  // Fetch Function
+  // ======================================
   const fetchDashboardData = useCallback(
-    async ({ pageNumber = currentPage } = {}) => {
+    async (pageNumber = 1) => {
       abortControllerRef.current?.abort();
-      const newAbortController = new AbortController();
-      abortControllerRef.current = newAbortController;
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
 
       try {
         setIsLoading(true);
         const { data } = await axiosInstance.get(
-          API_PATHS.TASK.GET_DASHBOARD_DATA,
+          API_PATHS.TASK.GET_ADMIN_DASHBOARD_DATA,
           {
             params: {
               page: pageNumber,
               limit: recordLimit,
-              nopel: searchNopel || undefined,
-              year: selectedYear || undefined,
+              nopel: searchTerm || undefined,
+              year: yearFilter || undefined,
             },
-            signal: newAbortController.signal,
+            signal: controller.signal,
           }
         );
-        setDashboardData(data ?? null);
+
+        setDashboardData(data ?? {});
+        setPage(pageNumber);
       } catch (error) {
         if (
           !["CanceledError", "AbortError", "ERR_CANCELED"].includes(
             error?.name || error?.code
           )
         ) {
-          console.error("Dashboard load error:", error);
-          toast.error("Gagal memuat dashboard");
+          console.error("Dashboard fetch error:", error);
+          toast.error("Gagal memuat data dashboard");
         }
       } finally {
         setIsLoading(false);
       }
     },
-    [currentPage, recordLimit, searchNopel, selectedYear]
+    [recordLimit, searchTerm, yearFilter]
   );
 
+  // ======================================
+  // Effects
+  // ======================================
   useEffect(() => {
-    fetchDashboardData({ pageNumber: 1 });
+    fetchDashboardData(1);
     return () => abortControllerRef.current?.abort();
-  }, []);
+  }, [fetchDashboardData]);
 
-  useEffect(() => {
-    fetchDashboardData({ pageNumber: 1 });
-  }, [currentPage, searchNopel, selectedYear]);
-
-  // =============================
-  // RENDER
-  // =============================
+  // ======================================
+  // Render
+  // ======================================
   return (
     <DashboardLayout activeMenu="Dashboard">
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-white pb-12">
+        {/* Header */}
         <header className="my-6 px-3 md:px-0">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-            <div className="flex flex-col gap-1.5">
+            <div>
               <h1 className="text-2xl md:text-3xl font-semibold text-slate-900">
                 Selamat datang, {user?.name}
               </h1>
-              <p className="text-sm text-gray-500">{formattedToday}</p>
+              <p className="text-sm text-gray-500">{todayLabel}</p>
             </div>
 
-            {/* ✅ Filter Tahun */}
             <div className="flex items-center gap-2">
-              <label className="text-sm text-slate-700">Filter Tahun:</label>
+              <label className="text-sm font-medium text-slate-600">
+                Tahun:
+              </label>
               <select
-                value={selectedYear}
+                value={yearFilter}
                 onChange={(e) => {
-                  setSelectedYear(e.target.value);
-                  setCurrentPage(1);
+                  setYearFilter(e.target.value);
+                  fetchDashboardData(1);
                 }}
-                className="border border-slate-300 rounded-lg px-2 py-1 text-sm focus:ring-2 focus:ring-indigo-500"
+                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-400 transition-all cursor-pointer hover:border-indigo-400"
               >
-                <option value="">Semua Tahun</option>
                 {availableYears.map((year) => (
                   <option key={year} value={year}>
                     {year}
                   </option>
                 ))}
+                <option value="">Semua Tahun</option>
               </select>
             </div>
           </div>
@@ -199,39 +177,37 @@ const Dashboard = () => {
           <section className="mt-6 grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
             <InfoCard
               label="Total Permohonan"
-              value={statsSummary?.totalTasks ?? 0}
+              value={stats.totalTasks ?? 0}
               color="primary"
             />
             <InfoCard
-              label="Permohonan Dikirim"
-              value={statsSummary?.totalApproved ?? 0}
+              label="Dikirim"
+              value={stats.totalApproved ?? 0}
               color="green"
             />
             <InfoCard
-              label="Permohonan Ditolak"
-              value={statsSummary?.totalRejected ?? 0}
+              label="Ditolak"
+              value={stats.totalRejected ?? 0}
               color="red"
             />
             <InfoCard
-              label="Permohonan Diproses"
-              value={statsSummary?.totalPending ?? 0}
+              label="Diproses"
+              value={stats.totalPending ?? 0}
               color="yellow"
             />
           </section>
         </header>
 
-        {/* Charts Section */}
+        {/* Charts */}
         <main className="px-3 md:px-0 grid grid-cols-1 md:grid-cols-2 gap-6 my-6">
           <Suspense fallback={<CardSkeleton />}>
-            {/* Per Jenis */}
-            <section className="bg-white rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 p-5">
+            <section className="bg-white rounded-2xl shadow-sm hover:shadow-md p-5">
               <h2 className="text-lg font-medium mb-4 text-slate-800">
                 Permohonan Per Jenis
               </h2>
-              {statsSummary?.tasksPerTitle &&
-              Object.keys(statsSummary.tasksPerTitle).length > 0 ? (
+              {stats.tasksPerTitle ? (
                 <CustomBarChart
-                  data={transformObjectToChartData(statsSummary.tasksPerTitle)}
+                  data={transformToChartData(stats.tasksPerTitle)}
                   colors={CHART_COLORS}
                 />
               ) : (
@@ -241,17 +217,13 @@ const Dashboard = () => {
               )}
             </section>
 
-            {/* Per Kecamatan */}
-            <section className="bg-white rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 p-5">
+            <section className="bg-white rounded-2xl shadow-sm hover:shadow-md p-5">
               <h2 className="text-lg font-medium mb-4 text-slate-800">
                 Permohonan Per Kecamatan
               </h2>
-              {statsSummary?.tasksPerSubdistrict &&
-              Object.keys(statsSummary.tasksPerSubdistrict).length > 0 ? (
+              {stats.tasksPerSubdistrict ? (
                 <CustomBarChart
-                  data={transformObjectToChartData(
-                    statsSummary.tasksPerSubdistrict
-                  )}
+                  data={transformToChartData(stats.tasksPerSubdistrict)}
                   colors={CHART_COLORS}
                 />
               ) : (
@@ -262,14 +234,13 @@ const Dashboard = () => {
             </section>
           </Suspense>
 
-          {/* Weekly Stats Chart */}
           <Suspense fallback={<CardSkeleton height={320} />}>
-            <section className="bg-white rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 p-5 md:col-span-2">
+            <section className="bg-white rounded-2xl shadow-sm hover:shadow-md p-5 md:col-span-2">
               <h2 className="text-lg font-medium mb-4 text-slate-800">
-                Pertumbuhan Permohonan (12 Minggu Terakhir)
+                Tren Permohonan (12 Minggu Terakhir)
               </h2>
-              {weeklyStatistics.length > 0 ? (
-                <CustomGraphChart data={weeklyStatistics} showLegend />
+              {weeklyStats.length > 0 ? (
+                <CustomGraphChart data={weeklyStats} showLegend />
               ) : (
                 <div className="py-8 text-center text-sm text-slate-500">
                   Belum ada data untuk ditampilkan.
@@ -280,7 +251,7 @@ const Dashboard = () => {
 
           {/* Overdue Tasks */}
           <Suspense fallback={<TableSkeleton />}>
-            <section className="bg-white rounded-2xl shadow-sm hover:shadow-md transition-all duration-300 p-5 md:col-span-2 relative">
+            <section className="bg-white rounded-2xl shadow-sm hover:shadow-md p-5 md:col-span-2 relative">
               {isLoading && (
                 <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/60 backdrop-blur-sm rounded-2xl">
                   <div className="h-6 w-6 animate-spin rounded-full border-4 border-indigo-500 border-t-transparent" />
@@ -288,36 +259,34 @@ const Dashboard = () => {
               )}
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-medium text-slate-800">
-                  Permohonan Jatuh Tempo (2 Minggu Sejak Diinput)
+                  Permohonan Jatuh Tempo (1 Minggu Sejak Diinput)
                 </h2>
                 <button
-                  onClick={handleSeeMore}
-                  className="flex items-center gap-1 text-indigo-600 hover:text-indigo-700 text-sm font-medium transition-colors"
+                  onClick={() => navigate("/admin/tasks")}
+                  className="flex items-center gap-1 text-indigo-600 hover:text-indigo-700 text-sm font-medium"
                 >
                   Lihat Semua
                   <LuArrowRight className="text-base" />
                 </button>
               </div>
+
               {overdueTasks.length > 0 ? (
                 <>
                   <TaskListTable
                     tableData={overdueTasks}
-                    page={responsePage}
-                    limit={responseLimit}
-                    searchNopel={searchNopel}
-                    onSearchNopel={(query) => {
-                      setCurrentPage(1);
-                      setSearchNopel(query || "");
+                    page={page}
+                    limit={recordLimit}
+                    searchNopel={searchTerm}
+                    onSearchNopel={(val) => {
+                      setSearchTerm(val);
+                      fetchDashboardData(1);
                     }}
                   />
                   <Pagination
-                    page={responsePage}
+                    page={page}
                     totalPages={totalPages}
                     disabled={isLoading}
-                    onPageChange={(nextPage) => {
-                      const safePage = Math.max(1, nextPage);
-                      if (safePage !== currentPage) setCurrentPage(safePage);
-                    }}
+                    onPageChange={(newPage) => fetchDashboardData(newPage)}
                   />
                 </>
               ) : (

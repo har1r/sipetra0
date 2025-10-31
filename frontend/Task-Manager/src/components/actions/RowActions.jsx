@@ -6,17 +6,8 @@ import { FcApproval } from "react-icons/fc";
 import { UserContext } from "../../context/UserContexts";
 
 /**
- * RowActions
- * Aksi-aksi per baris task (Detail / Edit / Approval / Delete)
- *
- * Props:
- * - id: string (wajib)
- * - showDetail?: boolean = true
- * - showEdit?: boolean = true
- * - showApproval?: boolean = true
- * - showDeleteBtn?: boolean = true
- * - onApprove?: (id: string) => void
- * - onDelete?:  (id: string) => void
+ * Komponen: RowActions
+ * Deskripsi: Menampilkan tombol aksi (Detail, Edit, Approval, Hapus) untuk setiap baris task.
  */
 function RowActions({
   id,
@@ -28,20 +19,19 @@ function RowActions({
   onDelete = () => {},
 }) {
   const { user } = useContext(UserContext) || {};
-  const isAdmin = String(user?.role || "").toLowerCase() === "admin";
+  const userRole = String(user?.role || "").toLowerCase();
+  const isAdmin = userRole === "admin";
 
-  // Gating: hanya admin boleh Edit & Delete.
   const canEdit = isAdmin && showEdit;
   const canDelete = isAdmin && showDeleteBtn;
 
   return (
-    <div className="flex gap-1 sm:gap-2 justify-center">
+    <div className="flex justify-center gap-1 sm:gap-2">
       {showDetail && (
         <Link
           to={`/task-detail/${id}`}
-          className="p-1.5 sm:p-2 rounded-full bg-blue-100 hover:bg-blue-200 transition"
-          title="Detail"
-          aria-label={`Lihat detail task ${id}`}
+          className="rounded-full bg-blue-100 p-1.5 sm:p-2 transition hover:bg-blue-200"
+          title="Lihat Detail"
         >
           <BiSolidDetail className="text-lg sm:text-xl text-blue-600" />
         </Link>
@@ -49,10 +39,9 @@ function RowActions({
 
       {canEdit && (
         <Link
-          to={`/admin/task/update/${id}`}
-          className="p-1.5 sm:p-2 rounded-full bg-yellow-100 hover:bg-yellow-200 transition"
-          title="Edit"
-          aria-label={`Ubah task ${id}`}
+          to={`/task/update/${id}`}
+          className="rounded-full bg-yellow-100 p-1.5 sm:p-2 transition hover:bg-yellow-200"
+          title="Edit Task"
         >
           <MdEdit className="text-lg sm:text-xl text-yellow-600" />
         </Link>
@@ -62,9 +51,8 @@ function RowActions({
         <button
           type="button"
           onClick={() => onApprove(id)}
-          className="p-1.5 sm:p-2 rounded-full bg-green-100 hover:bg-green-200 transition"
-          title="Approval"
-          aria-label={`Buka approval task ${id}`}
+          className="rounded-full bg-green-100 p-1.5 sm:p-2 transition hover:bg-green-200"
+          title="Approval Task"
         >
           <FcApproval className="text-lg sm:text-xl" />
         </button>
@@ -74,9 +62,8 @@ function RowActions({
         <button
           type="button"
           onClick={() => onDelete(id)}
-          className="p-1.5 sm:p-2 rounded-full bg-red-100 hover:bg-red-200 transition"
-          title="Hapus"
-          aria-label={`Hapus task ${id}`}
+          className="rounded-full bg-red-100 p-1.5 sm:p-2 transition hover:bg-red-200"
+          title="Hapus Task"
         >
           <MdDelete className="text-lg sm:text-xl text-red-600" />
         </button>
@@ -86,4 +73,3 @@ function RowActions({
 }
 
 export default React.memo(RowActions);
-

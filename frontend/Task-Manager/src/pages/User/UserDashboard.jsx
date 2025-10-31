@@ -7,10 +7,22 @@ import React, {
   Suspense,
   useRef,
 } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
+import { LuArrowRight } from "react-icons/lu";
 
 import DashboardLayout from "../../components/layouts/DashboardLayout";
 import InfoCard from "../../components/cards/InfoCard";
+import CardSkeleton from "../../components/Skeletons/CardSkeleton";
+import TableSkeleton from "../../components/Skeletons/TableSkeleton";
+import Pagination from "../../components/ui/Pagination";
+
+import { UserContext } from "../../context/UserContexts";
+import { UseUserAuth } from "../../hooks/UseUserAuth";
+import { API_PATHS } from "../../utils/apiPaths";
+import axiosInstance from "../../utils/axiosInstance";
+import { formatDateId } from "../../utils/formatDateId";
+
 const CustomBarChart = React.lazy(() =>
   import("../../components/charts/CustomBarChart")
 );
@@ -18,307 +30,260 @@ const TaskListTable = React.lazy(() =>
   import("../../components/tabels/TaskListTable")
 );
 
-import CardSkeleton from "../../components/Skeletons/CardSkeleton";
-import TableSkeleton from "../../components/Skeletons/TableSkeleton";
+// ======================================
+// Helpers
+// ======================================
+const CHART_COLORS = ["#8D51FF", "#00B8DB", "#7BCE08", "#FFBB28", "#FF1F57"];
 
-import Pagination from "../../components/ui/Pagination";
-import { UserContext } from "../../context/UserContexts";
-import { UseUserAuth } from "../../hooks/UseUserAuth";
-import { API_PATHS } from "../../utils/apiPaths";
-import axiosInstance from "../../utils/axiosInstance";
+const transformToChartData = (obj) =>
+  obj ? Object.entries(obj).map(([label, count]) => ({ label, count })) : [];
 
-import { formatDateId } from "../../utils/formatDateId";
-
-const COLORS = ["#8D51FF", "#00B8DB", "#7BCE08", "#FFBB28", "#FF1F57"];
-
-const mapToBarData = (obj) =>
-  obj ? Object.entries(obj).map(([title, count]) => ({ title, count })) : [];
-
-// const formatTodayID = () =>
-//   new Intl.DateTimeFormat("id-ID", {
-//     weekday: "long",
-//     day: "numeric",
-//     month: "long",
-//     year: "numeric",
-//   }).format(new Date());
-
+// ======================================
+// Main Component
+// ======================================
 const UserDashboard = () => {
   UseUserAuth();
   const { user } = useContext(UserContext);
+  const navigate = useNavigate();
 
-  // state utama
-  const [userDashboardData, setUserDashboardData] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  // pagination & search (mengikuti struktur Dashboard admin)
+  // ======================================
+  // States
+  // ======================================
+  const [dashboardData, setDashboardData] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [page, setPage] = useState(1);
-  const limit = 5;
-  const [nopel, setNopel] = useState(""); // ⬅️ query NOPel
+  const [searchNopel, setSearchNopel] = useState("");
+  const currentYear = new Date().getFullYear();
+  const [yearFilter, setYearFilter] = useState(currentYear);
+  const abortControllerRef = useRef(null);
 
-  const todayStr = useMemo(() => formatDateId(new Date, { withWeekday: true}), []);
+  const recordLimit = 5;
+  const todayLabel = useMemo(
+    () => formatDateId(new Date(), { withWeekday: true }),
+    []
+  );
 
+  const availableYears = useMemo(
+    () => Array.from({ length: 3 }, (_, i) => currentYear - i),
+    [currentYear]
+  );
+
+  // ======================================
+  // Derived Data
+  // ======================================
   const {
-    barChartTitleData,
-    barChartSubdistrictData,
-    approvedTasks,
-    respPage,
-    respLimit,
-    totalPages,
-    stageBadge,
-    stage,
-  } = useMemo(() => {
-    const stats = userDashboardData?.stats;
-    const barChartTitleData = mapToBarData(stats?.tasksPerTitle);
-    const barChartSubdistrictData = mapToBarData(stats?.tasksPerSubdistrict);
+    stats = {},
+    approvedTasks = [],
+    approvedTotal = 0,
+    stage = "-",
+  } = dashboardData || {};
 
-    const respPage = Number(userDashboardData?.page ?? page);
-    const respLimit = Number(userDashboardData?.limit ?? limit);
+  const totalPages = useMemo(
+    () => Math.ceil(approvedTotal / recordLimit) || 1,
+    [approvedTotal, recordLimit]
+  );
 
-    const approvedTasks = Array.isArray(userDashboardData?.approvedTasks)
-      ? userDashboardData.approvedTasks
-      : [];
-
-    const approvedTotal =
-      typeof userDashboardData?.approvedTotal === "number"
-        ? userDashboardData.approvedTotal
-        : null;
-
-    const totalPages =
-      approvedTotal !== null
-        ? Math.max(1, Math.ceil(approvedTotal / respLimit))
-        : respPage + (approvedTasks.length === respLimit ? 1 : 0);
-
-    const stage = userDashboardData?.stage || "-";
-    const stageBadge = String(stage).toUpperCase();
-
-    return {
-      barChartTitleData,
-      barChartSubdistrictData,
-      respPage,
-      respLimit,
-      totalPages,
-      stageBadge,
-      approvedTasks,
-      stage,
-    };
-  }, [userDashboardData, page, limit]);
-
-  // fetcher + abort (selaras Dashboard admin)
-  const ctrlRef = useRef(null);
-
-  const fetchUserDashboardData = useCallback(
-    async (p = page) => {
-      ctrlRef.current?.abort();
-      const ctrl = new AbortController();
-      ctrlRef.current = ctrl;
+  // ======================================
+  // Fetch Function
+  // ======================================
+  const fetchDashboardData = useCallback(
+    async (pageNumber = 1) => {
+      abortControllerRef.current?.abort();
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
 
       try {
-        setLoading(true);
-
-        const userDashReq = await axiosInstance.get(
+        setIsLoading(true);
+        const { data } = await axiosInstance.get(
           API_PATHS.TASK.GET_USER_DASHBOARD_DATA,
           {
-            params: { page: p, limit, nopel: nopel || undefined }, // ⬅️ kirim nopel bila ada
-            signal: ctrl.signal,
+            params: {
+              page: pageNumber,
+              limit: recordLimit,
+              nopel: searchNopel || undefined,
+              year: yearFilter || undefined,
+            },
+            signal: controller.signal,
           }
         );
 
-        setUserDashboardData(userDashReq?.data ?? null);
-      } catch (err) {
+        setDashboardData(data ?? {});
+        setPage(pageNumber);
+      } catch (error) {
         if (
-          err?.name !== "CanceledError" &&
-          err?.name !== "AbortError" &&
-          err?.code !== "ERR_CANCELED"
+          !["CanceledError", "AbortError", "ERR_CANCELED"].includes(
+            error?.name || error?.code
+          )
         ) {
-          console.error("Error fetching user dashboard:", err);
-          toast.error("Gagal memuat dashboard");
+          console.error("Error fetching user dashboard:", error);
+          toast.error("Gagal memuat data dashboard");
         }
       } finally {
-        setLoading(false);
+        setIsLoading(false);
       }
     },
-    [page, limit, nopel]
+    [recordLimit, searchNopel, yearFilter]
   );
 
-  // mount
+  // ======================================
+  // Effects
+  // ======================================
   useEffect(() => {
-    fetchUserDashboardData(1);
-    return () => ctrlRef.current?.abort();
-  }, []);
+    fetchDashboardData(1);
+    return () => abortControllerRef.current?.abort();
+  }, [fetchDashboardData]);
 
-  // ganti halaman / query NOPel
-  useEffect(() => {
-    fetchUserDashboardData(page);
-  }, [page, nopel, fetchUserDashboardData]);
-
+  // ======================================
+  // Render
+  // ======================================
   return (
     <DashboardLayout activeMenu="Dashboard">
-      {/* Header */}
-      <header
-        className="card my-5"
-        role="banner"
-        aria-labelledby="user-dashboard-title"
-      >
-        <div className="flex flex-col gap-1.5">
-          {stageBadge && (
-            <span
-              className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-medium bg-slate-100 text-slate-700 w-fit"
-              aria-label={`Tahap ${stageBadge}`}
-            >
-              Tahap: {stageBadge}
-            </span>
-          )}
-          <h1
-            id="user-dashboard-title"
-            className="text-xl md:text-2xl font-semibold text-slate-900"
-          >
-            Selamat Datang, {user?.name}
-          </h1>
-          <p className="text-xs md:text-[13px] text-gray-500">{todayStr}</p>
-        </div>
-
-        {/* Summary cards */}
-        <section
-          id="user-stats"
-          aria-labelledby="user-stats-title"
-          className="mt-5 grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-3 md:gap-6"
-        >
-          <InfoCard
-            id="u-stat-total"
-            label="Total Permohonan"
-            value={userDashboardData?.stats?.totalTask ?? 0}
-            color="primary"
-          />
-          <InfoCard
-            id="u-stat-approved"
-            label={`Disetujui di tahap ${stage ?? "-"}`}
-            value={userDashboardData?.stats?.totalApproved ?? 0}
-            color="green"
-          />
-          <InfoCard
-            id="u-stat-rejected"
-            label={`Ditolak di tahap ${stage ?? "-"}`}
-            value={userDashboardData?.stats?.totalRejected ?? 0}
-            color="red"
-          />
-          <InfoCard
-            id="u-stat-pending"
-            label={`Diproses di tahap ${stage ?? "-"}`}
-            value={userDashboardData?.stats?.totalPending ?? 0}
-            color="yellow"
-          />
-        </section>
-      </header>
-
-      {/* Charts & Table */}
-      <main
-        role="main"
-        className="grid grid-cols-1 lg:grid-cols-2 gap-6 my-4 md:my-6"
-      >
-        {/* Dua chart dalam satu Suspense (selaras Dashboard admin) */}
-        <Suspense fallback={<CardSkeleton />}>
-          <section
-            id="u-chart-title"
-            aria-labelledby="u-chart-title-heading"
-            className="card"
-          >
-            <div className="flex items-center justify-between mb-5">
-              <h2 className="text-base font-medium" id="u-chart-title-heading">
-                Permohonan per jenis
-              </h2>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-white pb-12">
+        {/* Header */}
+        <header className="my-6 px-3 md:px-0">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-semibold text-slate-900">
+                Selamat datang, {user?.name}
+              </h1>
+              <p className="text-sm text-gray-500">{todayLabel}</p>
+              <span className="inline-block mt-2 text-xs font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full">
+                Tahap: {String(stage).toUpperCase()}
+              </span>
             </div>
-            {barChartTitleData.length > 0 ? (
-              <CustomBarChart
-                id="u-bar-title"
-                data={barChartTitleData}
-                colors={COLORS}
-              />
-            ) : (
-              <div className="py-8 text-center text-sm text-slate-500">
-                Belum ada data untuk tahap ini.
-              </div>
-            )}
-          </section>
 
-          <section
-            id="u-chart-subdistrict"
-            aria-labelledby="u-chart-subdistrict-heading"
-            className="card"
-          >
-            <div className="flex items-center justify-between mb-5">
-              <h2
-                className="text-base font-medium"
-                id="u-chart-subdistrict-heading"
+            <div className="flex items-center gap-2">
+              <label className="text-sm font-medium text-slate-600">
+                Tahun:
+              </label>
+              <select
+                value={yearFilter}
+                onChange={(e) => {
+                  setYearFilter(e.target.value);
+                  fetchDashboardData(1);
+                }}
+                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-400 transition-all cursor-pointer hover:border-indigo-400"
               >
-                Permohonan per kecamatan
-              </h2>
+                {availableYears.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+                <option value="">Semua Tahun</option>
+              </select>
             </div>
-            {barChartSubdistrictData.length > 0 ? (
-              <CustomBarChart
-                id="u-bar-subdistrict"
-                data={barChartSubdistrictData}
-                colors={COLORS}
-              />
-            ) : (
-              <div className="py-8 text-center text-sm text-slate-500">
-                Belum ada data tahap ini.
-              </div>
-            )}
-          </section>
-        </Suspense>
+          </div>
 
-        {/* Daftar approved + overlay loading + pagination + search NOPel */}
-        <Suspense fallback={<TableSkeleton />}>
-          <section
-            id="u-recent"
-            aria-labelledby="u-recent-heading"
-            className="lg:col-span-2"
-          >
-            <div className="card relative min-h-[320px]">
-              {loading && (
-                <div className="absolute inset-0 z-10 grid place-items-center rounded-xl bg-white/60 backdrop-blur-[1px]">
+          {/* Summary Cards */}
+          <section className="mt-6 grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+            <InfoCard
+              label="Total Permohonan"
+              value={stats.totalTasks ?? 0}
+              color="primary"
+            />
+            <InfoCard
+              label="Dikirim"
+              value={stats.totalApproved ?? 0}
+              color="green"
+            />
+            <InfoCard
+              label="Ditolak"
+              value={stats.totalRejected ?? 0}
+              color="red"
+            />
+            <InfoCard
+              label="Diproses"
+              value={stats.totalPending ?? 0}
+              color="yellow"
+            />
+          </section>
+        </header>
+
+        {/* Charts */}
+        <main className="px-3 md:px-0 grid grid-cols-1 md:grid-cols-2 gap-6 my-6">
+          <Suspense fallback={<CardSkeleton />}>
+            <section className="bg-white rounded-2xl shadow-sm hover:shadow-md p-5">
+              <h2 className="text-lg font-medium mb-4 text-slate-800">
+                Permohonan Per Jenis
+              </h2>
+              {stats.tasksPerTitle ? (
+                <CustomBarChart
+                  data={transformToChartData(stats.tasksPerTitle)}
+                  colors={CHART_COLORS}
+                />
+              ) : (
+                <div className="py-8 text-center text-sm text-slate-500">
+                  Belum ada data untuk ditampilkan.
+                </div>
+              )}
+            </section>
+
+            <section className="bg-white rounded-2xl shadow-sm hover:shadow-md p-5">
+              <h2 className="text-lg font-medium mb-4 text-slate-800">
+                Permohonan Per Kecamatan
+              </h2>
+              {stats.tasksPerSubdistrict ? (
+                <CustomBarChart
+                  data={transformToChartData(stats.tasksPerSubdistrict)}
+                  colors={CHART_COLORS}
+                />
+              ) : (
+                <div className="py-8 text-center text-sm text-slate-500">
+                  Belum ada data untuk ditampilkan.
+                </div>
+              )}
+            </section>
+          </Suspense>
+
+          {/* Approved Task List */}
+          <Suspense fallback={<TableSkeleton />}>
+            <section className="bg-white rounded-2xl shadow-sm hover:shadow-md p-5 md:col-span-2 relative">
+              {isLoading && (
+                <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/60 backdrop-blur-sm rounded-2xl">
                   <div className="h-6 w-6 animate-spin rounded-full border-4 border-indigo-500 border-t-transparent" />
                 </div>
               )}
-
-              <div className="flex items-center justify-between mb-5">
-                <h2 className="text-base font-medium" id="u-recent-heading">
-                  Permohonan approved
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-lg font-medium text-slate-800">
+                  Permohonan Disetujui
                 </h2>
+                <button
+                  onClick={() => navigate("/user/tasks")}
+                  className="flex items-center gap-1 text-indigo-600 hover:text-indigo-700 text-sm font-medium"
+                >
+                  Lihat Semua
+                  <LuArrowRight className="text-base" />
+                </button>
               </div>
 
               {approvedTasks.length > 0 ? (
                 <>
                   <TaskListTable
                     tableData={approvedTasks}
-                    page={respPage}
-                    limit={respLimit}
-                    // === Search by NOPel (frontend) ===
-                    searchNopel={nopel}
-                    onSearchNopel={(q) => {
-                      setPage(1);
-                      setNopel(q || "");
+                    page={page}
+                    limit={recordLimit}
+                    searchNopel={searchNopel}
+                    onSearchNopel={(val) => {
+                      setSearchNopel(val);
+                      fetchDashboardData(1);
                     }}
                   />
                   <Pagination
-                    page={respPage}
+                    page={page}
                     totalPages={totalPages}
-                    disabled={loading}
-                    onPageChange={(next) => {
-                      const clamped = Math.max(1, next);
-                      if (clamped !== page) setPage(clamped);
-                    }}
+                    disabled={isLoading}
+                    onPageChange={(newPage) => fetchDashboardData(newPage)}
                   />
                 </>
               ) : (
                 <div className="py-8 text-center text-sm text-slate-500">
-                  Belum ada data diapproved pada tahap ini.
+                  Belum ada data disetujui pada tahap ini.
                 </div>
               )}
-            </div>
-          </section>
-        </Suspense>
-      </main>
+            </section>
+          </Suspense>
+        </main>
+      </div>
     </DashboardLayout>
   );
 };

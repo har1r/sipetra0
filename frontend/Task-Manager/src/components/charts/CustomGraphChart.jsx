@@ -11,42 +11,36 @@ import {
 } from "recharts";
 
 /* ===========================
-   Utils (selaras dengan Bar)
+   Utility: Number Formatter
    =========================== */
+const numberFormatter = new Intl.NumberFormat("id-ID");
 
-const NF_ID = new Intl.NumberFormat("id-ID");
+/* ===========================
+   Custom Tooltip Component
+   =========================== */
+const ChartTooltip = React.memo(({ active, payload }) => {
+  if (!active || !payload?.length) return null;
 
-// Tooltip co-located, sama gaya dan struktur dengan CustomBarChart
-const TooltipContent = React.memo(function TooltipContent({ active, payload }) {
-  if (!active || !Array.isArray(payload) || payload.length === 0) return null;
-
-  const datum = payload[0]?.payload ?? {};
-  const rawLabel = datum.label ?? payload[0]?.name ?? "";
-  const rawTotal = datum.total ?? payload[0]?.value ?? 0;
-
-  const label = rawLabel;
-  const total = useMemo(
-    () => NF_ID.format(Number.isFinite(rawTotal) ? rawTotal : 0),
-    [rawTotal]
+  const { label, total } = payload[0].payload;
+  const formattedTotal = useMemo(
+    () => numberFormatter.format(total || 0),
+    [total]
   );
 
   return (
-    <div
-      role="tooltip"
-      className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm"
-    >
+    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
       <p className="mb-1 text-sm font-semibold text-slate-900">{label}</p>
       <p className="text-sm text-slate-600">
-        Total: <span className="font-medium text-slate-900">{total}</span>
+        Total:{" "}
+        <span className="font-medium text-slate-900">{formattedTotal}</span>
       </p>
     </div>
   );
 });
 
 /* ===========================
-   Komponen Utama
+   Main Component
    =========================== */
-
 const CustomGraphChart = ({
   id,
   data = [],
@@ -54,38 +48,33 @@ const CustomGraphChart = ({
   className = "",
   showLegend = true,
 }) => {
-  // Normalisasi data agar tidak error
-  const normalized = useMemo(
+  // Normalisasi data
+  const chartData = useMemo(
     () =>
-      (Array.isArray(data) ? data : []).map((d) => ({
-        label: String(d?.label ?? ""),
-        total: Number.isFinite(d?.total) ? Number(d.total) : 0,
+      data.map((item) => ({
+        label: String(item?.label ?? ""),
+        total: Number(item?.total ?? 0),
       })),
     [data]
   );
 
-  // Animasi dimatikan kalau datanya terlalu banyak
-  const isAnimated = normalized.length <= 60;
+  // Batasi animasi agar ringan
+  const enableAnimation = chartData.length <= 60;
 
   return (
     <figure
       id={id}
       className={`rounded-2xl border border-slate-200 bg-white p-4 shadow-sm ${className}`}
-      role="group"
-      aria-label="Grafik garis"
+      aria-label="Grafik garis tren progres"
     >
-      <figcaption className="mb-2 text-sm font-semibold text-slate-700">
-        Tren Progres
-      </figcaption>
-
-      {normalized.length === 0 ? (
+      {chartData.length === 0 ? (
         <div className="h-72 grid place-items-center text-sm text-slate-500">
           Tidak ada data grafik
         </div>
       ) : (
         <ResponsiveContainer width="100%" height={height}>
           <LineChart
-            data={normalized}
+            data={chartData}
             margin={{ top: 10, right: 30, left: 0, bottom: 20 }}
           >
             <CartesianGrid
@@ -96,7 +85,6 @@ const CustomGraphChart = ({
 
             <XAxis
               dataKey="label"
-              interval="preserveStartEnd"
               angle={-15}
               textAnchor="end"
               height={50}
@@ -118,7 +106,7 @@ const CustomGraphChart = ({
               />
             )}
 
-            <Tooltip content={<TooltipContent />} />
+            <Tooltip content={<ChartTooltip />} />
 
             <Line
               type="monotone"
@@ -127,8 +115,8 @@ const CustomGraphChart = ({
               strokeWidth={2.25}
               dot={{ r: 3, fill: "#8D51FF" }}
               activeDot={{ r: 5, fill: "#8D51FF" }}
-              isAnimationActive={isAnimated}
-              name="Total Tasks"
+              isAnimationActive={enableAnimation}
+              name="Permohonan"
             />
           </LineChart>
         </ResponsiveContainer>

@@ -65,8 +65,8 @@ export const ADMIN_MENU = Object.freeze([
     id: "05",
     label: "Riwayat Pengantar",
     icon: RiFolderHistoryLine,
-    path: "/reports/daftar-surat-pengantar",
-    match: ["/reports/daftar-surat-pengantar"],
+    path: "/document/recommendation-latter",
+    match: ["/document/recommendation-latter"],
   }),
   Object.freeze({
     id: "06",
@@ -102,8 +102,8 @@ export const USER_MENU = Object.freeze([
     id: "04",
     label: "Riwayat Pengantar",
     icon: RiFolderHistoryLine,
-    path: "/reports/daftar-surat-pengantar",
-    match: ["/reports/daftar-surat-pengantar"],
+    path: "/document/recommendation-latter",
+    match: ["/document/recommendation-latter"],
   }),
   Object.freeze({
     id: "05",

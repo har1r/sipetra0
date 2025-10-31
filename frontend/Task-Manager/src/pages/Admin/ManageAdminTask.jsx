@@ -5,10 +5,8 @@ import React, {
   useMemo,
   useRef,
   useState,
-  useContext,
 } from "react";
 import { toast } from "react-toastify";
-
 import DashboardLayout from "../../components/layouts/DashboardLayout";
 import TaskFilter from "../../components/filters/TaskFilter";
 import Pagination from "../../components/ui/Pagination";
@@ -16,24 +14,23 @@ import ApprovalModal from "../../components/modals/ApprovalModal";
 import TableSkeleton from "../../components/Skeletons/TableSkeleton";
 import axiosInstance from "../../utils/axiosInstance";
 import { API_PATHS } from "../../utils/apiPaths";
-import { UserContext } from "../../context/UserContexts";
 
 const TaskTable = React.lazy(() => import("../../components/tabels/TaskTable"));
 
-const ManageUserTask = () => {
-  const { user } = useContext(UserContext);
-  const role = String(user?.role || "").toLowerCase();
-  const isResearcher = role === "peneliti";
-
-  // === STATE UTAMA ===
+const ManageTasks = () => {
+  // === State Utama ===
   const [tasks, setTasks] = useState([]);
   const [totalTasks, setTotalTasks] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedTaskIds, setSelectedTaskIds] = useState([]);
-  const [taskIdForApproval, setTaskIdForApproval] = useState(null);
   const [showApprovalModal, setShowApprovalModal] = useState(false);
+  const [taskIdForApproval, setTaskIdForApproval] = useState(null);
 
-  // === STATE FILTER & PAGINATION ===
+  // === Modal Konfirmasi Hapus ===
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [taskIdToDelete, setTaskIdToDelete] = useState(null);
+
+  // === State Filter & Pagination ===
   const defaultFilter = {
     nopel: "",
     title: "",
@@ -51,17 +48,17 @@ const ManageUserTask = () => {
     [totalTasks]
   );
 
-  // === STATE LOADING ===
+  // === State Loading ===
   const [isLoading, setIsLoading] = useState(false);
   const [isFiltering, setIsFiltering] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
-  // === ABORT CONTROLLERS ===
+  // === Abort Controllers ===
   const fetchCtrlRef = useRef(null);
   const exportCtrlRef = useRef(null);
 
-  // === FETCH TASKS ===
-  const fetchUserTasks = useCallback(
+  // === Fetch Tasks ===
+  const fetchTasks = useCallback(
     async (page, appliedFilter) => {
       fetchCtrlRef.current?.abort();
       const ctrl = new AbortController();
@@ -76,10 +73,10 @@ const ManageUserTask = () => {
 
         setTasks(Array.isArray(data.tasks) ? data.tasks : []);
         setTotalTasks(Number(data.total || 0));
-        setSelectedTaskIds([]);
+        setSelectedTaskIds([]); // reset seleksi
       } catch (error) {
         if (error?.name !== "CanceledError" && error?.code !== "ERR_CANCELED") {
-          console.error("Error fetching user tasks:", error);
+          console.error("Error fetching tasks:", error);
           toast.error("Gagal mengambil data permohonan");
         }
       } finally {
@@ -90,45 +87,54 @@ const ManageUserTask = () => {
   );
 
   useEffect(() => {
-    fetchUserTasks(currentPage, appliedFilters);
+    fetchTasks(currentPage, appliedFilters);
     return () => {
       fetchCtrlRef.current?.abort();
       exportCtrlRef.current?.abort();
     };
-  }, [currentPage, appliedFilters, fetchUserTasks]);
+  }, [currentPage, appliedFilters, fetchTasks]);
 
   useEffect(() => {
     if (!isLoading && isFiltering) setIsFiltering(false);
   }, [isLoading, isFiltering]);
 
-  // === CHECKBOX HANDLERS (HANYA PENELITI) ===
-  const toggleTaskSelection = useCallback(
-    (taskId) => {
-      if (!isResearcher) return;
-      setSelectedTaskIds((prev) =>
-        prev.includes(taskId)
-          ? prev.filter((id) => id !== taskId)
-          : [...prev, taskId]
-      );
-    },
-    [isResearcher]
-  );
+  // === Checkbox Selection ===
+  const toggleTaskSelection = useCallback((taskId) => {
+    setSelectedTaskIds((prev) =>
+      prev.includes(taskId)
+        ? prev.filter((id) => id !== taskId)
+        : [...prev, taskId]
+    );
+  }, []);
 
   const toggleSelectAll = useCallback(
-    (checked) => {
-      if (!isResearcher) return;
-      setSelectedTaskIds(checked ? tasks.map((t) => t._id) : []);
-    },
-    [tasks, isResearcher]
+    (checked) => setSelectedTaskIds(checked ? tasks.map((t) => t._id) : []),
+    [tasks]
   );
 
-  // === APPROVAL MODAL ===
+  // === Approval ===
   const openApprovalModal = useCallback((taskId) => {
     setTaskIdForApproval(taskId);
     setShowApprovalModal(true);
   }, []);
 
-  // === DOWNLOAD HELPER ===
+  // === Delete Task (tanpa window.confirm) ===
+  const handleDeleteTask = useCallback(async () => {
+    if (!taskIdToDelete) return;
+
+    try {
+      await axiosInstance.delete(API_PATHS.TASK.DELETE_TASK(taskIdToDelete));
+      toast.success("Permohonan berhasil dihapus");
+      fetchTasks(currentPage, appliedFilters);
+    } catch {
+      toast.error("Gagal menghapus permohonan");
+    } finally {
+      setTaskIdToDelete(null);
+      setShowDeleteConfirm(false);
+    }
+  }, [taskIdToDelete, fetchTasks, currentPage, appliedFilters]);
+
+  // === Download Helper ===
   const downloadFile = (blob, filename) => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -140,69 +146,51 @@ const ManageUserTask = () => {
     URL.revokeObjectURL(url);
   };
 
-  // === EXPORT REKOMENDASI (KHUSUS PENELITI) ===
-  const handleExportTasks = useCallback(
-    async (taskIds) => {
-      if (!isResearcher) {
-        toast.info("Hanya role Peneliti yang dapat mengekspor data.");
-        return;
-      }
+  // === Export Rekomendasi ===
+  const handleExportTasks = useCallback(async (taskIds) => {
+    exportCtrlRef.current?.abort();
+    const ctrl = new AbortController();
+    exportCtrlRef.current = ctrl;
+    setIsExporting(true);
 
-      const idsToExport =
-        Array.isArray(taskIds) && taskIds.length > 0
-          ? taskIds
-          : selectedTaskIds;
-      if (idsToExport.length === 0) {
-        toast("Pilih minimal satu permohonan untuk diekspor.", { icon: "ℹ️" });
-        return;
-      }
+    try {
+      const res = await axiosInstance.post(
+        API_PATHS.REPORTS.EXPORT_SELECTED_TASKS,
+        { taskIds },
+        { responseType: "blob", signal: ctrl.signal }
+      );
 
-      exportCtrlRef.current?.abort();
-      const ctrl = new AbortController();
-      exportCtrlRef.current = ctrl;
-      setIsExporting(true);
+      const cd = res.headers?.["content-disposition"];
+      let filename = "";
 
-      try {
-        const res = await axiosInstance.post(
-          API_PATHS.REPORTS.EXPORT_SELECTED_TASKS,
-          { taskIds: idsToExport },
-          { responseType: "blob", signal: ctrl.signal }
+      if (cd) {
+        const match = /filename\*=UTF-8''([^;]+)|filename="?([^"]+)"?/i.exec(
+          cd
         );
-
-        const cd = res.headers?.["content-disposition"];
-        let filename = "";
-
-        if (cd) {
-          const match = /filename\*=UTF-8''([^;]+)|filename="?([^"]+)"?/i.exec(
-            cd
-          );
-          filename = decodeURIComponent(match?.[1] || match?.[2] || "");
-        }
-
-        if (!filename) {
-          const ts = new Date()
-            .toISOString()
-            .replace(/[-:]/g, "")
-            .split(".")[0];
-          filename =
-            idsToExport.length > 1 ? `rekom-bulk-${ts}.zip` : `rekom-${ts}.pdf`;
-        }
-
-        downloadFile(res.data, filename);
-        toast.success("Unduhan dimulai.");
-      } catch (err) {
-        if (err?.name !== "CanceledError" && err?.code !== "ERR_CANCELED") {
-          toast.error("Gagal mengunduh rekomendasi.");
-        }
-      } finally {
-        setIsExporting(false);
+        filename = decodeURIComponent(match?.[1] || match?.[2] || "");
       }
-    },
-    [isResearcher, selectedTaskIds]
-  );
 
-  // === FILTER HANDLERS ===
-  const applyFilters = useCallback(() => {
+      if (!filename) {
+        const ts = new Date().toISOString().replace(/[-:]/g, "").split(".")[0];
+        filename =
+          taskIds.length > 1 ? `rekom-bulk-${ts}.zip` : `rekom-${ts}.pdf`;
+      }
+
+      downloadFile(res.data, filename);
+      toast.success("Mengunduh");
+    } catch (err) {
+      if (err?.name !== "CanceledError" && err?.code !== "ERR_CANCELED") {
+        toast.error(
+          "Gagal mengunduh rekomendasi, pastikan jenis permohonan sama."
+        );
+      }
+    } finally {
+      setIsExporting(false);
+    }
+  }, []);
+
+  // === Filter Actions ===
+  const applyFilterChanges = useCallback(() => {
     setIsFiltering(true);
     setCurrentPage(1);
     setAppliedFilters(filters);
@@ -215,18 +203,20 @@ const ManageUserTask = () => {
     setCurrentPage(1);
   }, []);
 
-  // === RENDER ===
+  // === Render ===
   return (
     <DashboardLayout activeMenu="Manage Tasks">
       <div className="mt-5">
+        {/* Filter Section */}
         <TaskFilter
           filters={filters}
           setFilters={setFilters}
           loading={isFiltering}
-          onFilterSubmit={applyFilters}
+          onFilterSubmit={applyFilterChanges}
           onFilterReset={resetFilters}
         />
 
+        {/* Table Section */}
         <Suspense fallback={<TableSkeleton rows={10} cols={9} />}>
           <div className="relative mt-4 rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
             {isLoading && (
@@ -242,7 +232,10 @@ const ManageUserTask = () => {
                   selectedTaskIds={selectedTaskIds}
                   onToggleRow={toggleTaskSelection}
                   onToggleAll={toggleSelectAll}
-                  handleDelete={undefined} // user tidak boleh hapus
+                  handleDelete={(taskId) => {
+                    setTaskIdToDelete(taskId);
+                    setShowDeleteConfirm(true);
+                  }}
                   openApprovalModal={openApprovalModal}
                   page={currentPage}
                   limit={limit}
@@ -272,19 +265,48 @@ const ManageUserTask = () => {
           </div>
         </Suspense>
 
+        {/* Modal Approval */}
         {showApprovalModal && (
           <ApprovalModal
             taskId={taskIdForApproval}
             onClose={() => setShowApprovalModal(false)}
             onSuccess={() => {
-              fetchUserTasks(currentPage, appliedFilters);
+              fetchTasks(currentPage, appliedFilters);
               setShowApprovalModal(false);
             }}
           />
+        )}
+
+        {/* Modal Konfirmasi Hapus */}
+        {showDeleteConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+            <div className="w-[90%] max-w-sm rounded-2xl bg-white p-6 shadow-lg">
+              <h3 className="mb-2 text-lg font-semibold text-slate-800">
+                Konfirmasi Hapus
+              </h3>
+              <p className="mb-5 text-sm text-slate-600">
+                Apakah Anda yakin ingin menghapus permohonan ini?
+              </p>
+              <div className="flex justify-end gap-3">
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="rounded-lg bg-slate-200 px-3 py-1.5 text-sm text-slate-700 transition hover:bg-slate-300"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={handleDeleteTask}
+                  className="rounded-lg bg-red-600 px-3 py-1.5 text-sm text-white transition hover:bg-red-700"
+                >
+                  Hapus
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </DashboardLayout>
   );
 };
 
-export default ManageUserTask;
+export default ManageTasks;

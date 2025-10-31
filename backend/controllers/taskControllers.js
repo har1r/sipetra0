@@ -140,7 +140,162 @@ const createTask = async (req, res) => {
 // @Deskripsi Mengupdate approval
 // @Route     PATCH /api/tasks/:id/approve
 // @Access    Private (hanya admin dan approver pada stagenya yang bisa approve)
-// pastikan sudah: const mongoose = require("mongoose");
+// const approveTask = async (req, res) => {
+//   try {
+//     const { taskId } = req.params;
+//     const { action, note } = req.body;
+//     const user = req.user;
+
+//     // 1) Validasi input
+//     if (!["approved", "rejected"].includes(action)) {
+//       return res
+//         .status(400)
+//         .json({ message: "Action harus 'approved' atau 'rejected'." });
+//     }
+//     if (!taskId || !mongoose.Types.ObjectId.isValid(taskId)) {
+//       return res.status(400).json({ message: "taskId tidak valid." });
+//     }
+//     const safeNote =
+//       typeof note === "string" ? note.trim().slice(0, 1000) : undefined;
+
+//     // 2) Ambil minimal data (lean) untuk validasi role & status saat ini
+//     const task = await Task.findById(taskId)
+//       .select(
+//         "currentStage approvals isCompleted rejectedStage title mainData.nop mainData.nopel createdAt"
+//       )
+//       .lean();
+
+//     if (!task)
+//       return res.status(404).json({ message: "Task tidak ditemukan." });
+
+//     const currentStage = task.currentStage;
+//     const stageIdx = Array.isArray(stageOrder)
+//       ? stageOrder.indexOf(currentStage)
+//       : -1;
+//     if (stageIdx === -1) {
+//       return res
+//         .status(400)
+//         .json({ message: "Stage saat ini tidak valid pada workflow." });
+//     }
+
+//     const approval = (task.approvals || []).find(
+//       (a) => a?.stage === currentStage
+//     );
+//     if (!approval) {
+//       return res
+//         .status(400)
+//         .json({ message: "Approval stage tidak ditemukan." });
+//     }
+
+//     // 3) Role check: hanya admin atau approver role yg ditetapkan utk stage ini
+//     if (user?.role !== "admin" && user?.role !== approval.approverRole) {
+//       return res
+//         .status(403)
+//         .json({ message: "Anda tidak memiliki izin untuk approve stage ini." });
+//     }
+
+//     // 4) Hanya izinkan dua skenario:
+//     //    - first action (status 'pending')
+//     //    - overwrite dari 'rejected'
+//     if (!["pending", "rejected"].includes(approval.status || "pending")) {
+//       return res.status(400).json({
+//         message:
+//           "Overwrite hanya diizinkan dari status 'rejected' (atau aksi pertama dari 'pending').",
+//       });
+//     }
+
+//     // 5) Hitung next stage bila approved
+//     const lastIdx = stageOrder.length - 1;
+//     const nextStage =
+//       action === "approved"
+//         ? stageIdx < lastIdx
+//           ? stageOrder[stageIdx + 1]
+//           : "selesai"
+//         : currentStage;
+
+//     // 6) Siapkan operasi update atomik pada elemen approval yang MATCH stage aktif + status awal yang sama
+//     const setOps = {
+//       "approvals.$.status": action,
+//       "approvals.$.approvedAt": new Date(),
+//       "approvals.$.approverId": user._id,
+//     };
+//     if (safeNote) setOps["approvals.$.note"] = safeNote;
+
+//     if (action === "approved") {
+//       setOps.currentStage = nextStage;
+//       setOps.isCompleted = nextStage === "selesai";
+//       setOps.rejectedStage = null;
+//     } else {
+//       setOps.isCompleted = false;
+//       setOps.rejectedStage = currentStage;
+//     }
+
+//     const updateDoc = {
+//       $set: setOps,
+//       $push: {
+//         "approvals.$.history": {
+//           prevStatus: approval.status || "pending",
+//           newStatus: action,
+//           at: new Date(),
+//           by: user._id,
+//           note: safeNote ?? null,
+//           type:
+//             (approval.status || "pending") === "pending"
+//               ? "approve"
+//               : "overwrite",
+//         },
+//       },
+//     };
+
+//     // Penting: pakai $elemMatch agar positional `$` mengacu ke elemen yang sama (stage & status awal)
+//     const query = {
+//       _id: taskId,
+//       currentStage,
+//       approvals: {
+//         $elemMatch: {
+//           stage: currentStage,
+//           status: approval.status || "pending",
+//         },
+//       },
+//     };
+
+//     const updated = await Task.findOneAndUpdate(query, updateDoc, {
+//       new: true,
+//       runValidators: true,
+//       projection: {
+//         _id: 1,
+//         title: 1,
+//         currentStage: 1,
+//         isCompleted: 1,
+//         rejectedStage: 1,
+//         "mainData.nop": 1,
+//         "mainData.nopel": 1,
+//         approvals: 1,
+//         createdAt: 1,
+//       },
+//     });
+
+//     if (!updated) {
+//       // Bisa karena status sudah berubah oleh user lain (race) atau stage bergeser.
+//       return res.status(409).json({
+//         message:
+//           "Task berubah di server (stage/status tidak lagi sesuai). Muat ulang data lalu coba lagi.",
+//       });
+//     }
+
+//     res.set("Cache-Control", "no-store");
+//     return res.status(200).json({
+//       message: `Task ${action} di stage '${currentStage}'.`,
+//       task: updated,
+//     });
+//   } catch (error) {
+//     console.error("Error approving task:", error);
+//     return res.status(500).json({
+//       message: "Terjadi kesalahan saat approve task.",
+//       error: error?.message || String(error),
+//     });
+//   }
+// };
 const approveTask = async (req, res) => {
   try {
     const { taskId } = req.params;
@@ -159,10 +314,10 @@ const approveTask = async (req, res) => {
     const safeNote =
       typeof note === "string" ? note.trim().slice(0, 1000) : undefined;
 
-    // 2) Ambil minimal data (lean) untuk validasi role & status saat ini
+    // 2) Ambil data task
     const task = await Task.findById(taskId)
       .select(
-        "currentStage approvals isCompleted rejectedStage title mainData.nop mainData.nopel createdAt"
+        "currentStage approvals isCompleted rejectedStage title mainData.nop mainData.nopel createdAt noSuratPengantar"
       )
       .lean();
 
@@ -170,9 +325,7 @@ const approveTask = async (req, res) => {
       return res.status(404).json({ message: "Task tidak ditemukan." });
 
     const currentStage = task.currentStage;
-    const stageIdx = Array.isArray(stageOrder)
-      ? stageOrder.indexOf(currentStage)
-      : -1;
+    const stageIdx = stageOrder.indexOf(currentStage);
     if (stageIdx === -1) {
       return res
         .status(400)
@@ -180,7 +333,7 @@ const approveTask = async (req, res) => {
     }
 
     const approval = (task.approvals || []).find(
-      (a) => a?.stage === currentStage
+      (a) => a.stage === currentStage
     );
     if (!approval) {
       return res
@@ -188,16 +341,14 @@ const approveTask = async (req, res) => {
         .json({ message: "Approval stage tidak ditemukan." });
     }
 
-    // 3) Role check: hanya admin atau approver role yg ditetapkan utk stage ini
-    if (user?.role !== "admin" && user?.role !== approval.approverRole) {
+    // 3) Role check
+    if (user.role !== "admin" && user.role !== approval.approverRole) {
       return res
         .status(403)
         .json({ message: "Anda tidak memiliki izin untuk approve stage ini." });
     }
 
-    // 4) Hanya izinkan dua skenario:
-    //    - first action (status 'pending')
-    //    - overwrite dari 'rejected'
+    // 4) Hanya izinkan aksi pertama atau overwrite dari rejected
     if (!["pending", "rejected"].includes(approval.status || "pending")) {
       return res.status(400).json({
         message:
@@ -214,7 +365,7 @@ const approveTask = async (req, res) => {
           : "selesai"
         : currentStage;
 
-    // 6) Siapkan operasi update atomik pada elemen approval yang MATCH stage aktif + status awal yang sama
+    // 6) Siapkan operasi update atomik
     const setOps = {
       "approvals.$.status": action,
       "approvals.$.approvedAt": new Date(),
@@ -224,7 +375,18 @@ const approveTask = async (req, res) => {
 
     if (action === "approved") {
       setOps.currentStage = nextStage;
-      setOps.isCompleted = nextStage === "selesai";
+
+      // Logic khusus stage diteliti: jangan set isCompleted true kalau noSuratPengantar belum ada
+      if (
+        nextStage === "selesai" &&
+        currentStage === "diteliti" &&
+        !task.noSuratPengantar
+      ) {
+        setOps.isCompleted = false; // tetap false
+      } else {
+        setOps.isCompleted = nextStage === "selesai";
+      }
+
       setOps.rejectedStage = null;
     } else {
       setOps.isCompleted = false;
@@ -248,7 +410,7 @@ const approveTask = async (req, res) => {
       },
     };
 
-    // Penting: pakai $elemMatch agar positional `$` mengacu ke elemen yang sama (stage & status awal)
+    // 7) Query dengan $elemMatch
     const query = {
       _id: taskId,
       currentStage,
@@ -273,11 +435,11 @@ const approveTask = async (req, res) => {
         "mainData.nopel": 1,
         approvals: 1,
         createdAt: 1,
+        noSuratPengantar: 1,
       },
     });
 
     if (!updated) {
-      // Bisa karena status sudah berubah oleh user lain (race) atau stage bergeser.
       return res.status(409).json({
         message:
           "Task berubah di server (stage/status tidak lagi sesuai). Muat ulang data lalu coba lagi.",
@@ -288,6 +450,12 @@ const approveTask = async (req, res) => {
     return res.status(200).json({
       message: `Task ${action} di stage '${currentStage}'.`,
       task: updated,
+      note:
+        nextStage === "selesai" &&
+        currentStage === "diteliti" &&
+        !task.noSuratPengantar
+          ? "Task sudah lanjut tapi belum bisa dianggap selesai karena nomor surat pengantar belum ada."
+          : undefined,
     });
   } catch (error) {
     console.error("Error approving task:", error);
@@ -446,125 +614,137 @@ const deleteTask = async (req, res) => {
 // @Access  Private (admin)
 const getAdminDashboardStats = async (req, res) => {
   try {
-    const user = req.user;
+    // === 0. Validasi Role ===
+    const { user } = req;
     if (!user || user.role !== "admin") {
       return res.status(403).json({ message: "Forbidden" });
     }
 
-    // Ambil tahun dari query (opsional)
-    const year = parseInt(req.query.year, 10);
+    // === 1. Parameter Dasar ===
+    const currentYear = new Date().getFullYear();
+    const selectedYear = Number(req.query.year) || currentYear;
 
-    // Pagination aman untuk UI
     const MAX_LIMIT = 100;
-    const page = Math.max(1, parseInt(req.query.page, 5) || 1);
-    const limit = Math.min(
+    const currentPage = Math.max(1, Number(req.query.page) || 1);
+    const itemsPerPage = Math.min(
       MAX_LIMIT,
-      Math.max(1, parseInt(req.query.limit, 5) || 5)
+      Math.max(1, Number(req.query.limit) || 5)
     );
-    const skip = (page - 1) * limit;
+    const skip = (currentPage - 1) * itemsPerPage;
 
-    // ===== Filter tahun (opsional) =====
-    let yearFilter = {};
-    if (!isNaN(year)) {
-      const startOfYear = new Date(`${year}-01-01T00:00:00.000Z`);
-      const endOfYear = new Date(`${year}-12-31T23:59:59.999Z`);
-      yearFilter = { createdAt: { $gte: startOfYear, $lte: endOfYear } };
-    }
+    // === 2. Filter Tahun ===
+    const startOfYear = new Date(`${selectedYear}-01-01T00:00:00.000Z`);
+    const endOfYear = new Date(`${selectedYear}-12-31T23:59:59.999Z`);
+    const yearFilter = { createdAt: { $gte: startOfYear, $lte: endOfYear } };
 
-    // ===== 1) Statistik Umum =====
+    // === 3. Statistik Utama ===
     const [totalTasks, totalApproved, totalRejected, totalPending] =
       await Promise.all([
-        Task.countDocuments({ ...yearFilter }),
+        Task.countDocuments(yearFilter),
         Task.countDocuments({
+          ...yearFilter,
           approvals: { $elemMatch: { stage: "dikirim", status: "approved" } },
-          ...yearFilter,
         }),
         Task.countDocuments({
+          ...yearFilter,
           approvals: { $elemMatch: { status: "rejected" } },
-          ...yearFilter,
         }),
         Task.countDocuments({
+          ...yearFilter,
           approvals: {
             $elemMatch: {
               stage: "dikirim",
               $or: [{ status: "pending" }, { status: null }],
             },
           },
-          ...yearFilter,
         }),
       ]);
 
+    // === 4. Data per Jenis & Kecamatan ===
     const [tasksPerTitleAgg, tasksPerSubdistrictAgg] = await Promise.all([
       Task.aggregate([
-        { $match: { ...yearFilter } },
+        { $match: yearFilter },
         { $group: { _id: "$title", count: { $sum: 1 } } },
       ]),
       Task.aggregate([
-        { $match: { ...yearFilter } },
+        { $match: yearFilter },
         { $group: { _id: "$mainData.subdistrict", count: { $sum: 1 } } },
       ]),
     ]);
 
-    const tasksPerTitle = {};
-    for (const it of tasksPerTitleAgg) {
-      tasksPerTitle[it._id || "Tidak Diketahui"] = it.count || 0;
-    }
+    const toObject = (arr, label = "Tidak Diketahui") =>
+      arr.reduce((obj, i) => {
+        obj[i._id || label] = i.count || 0;
+        return obj;
+      }, {});
 
-    const tasksPerSubdistrict = {};
-    for (const it of tasksPerSubdistrictAgg) {
-      tasksPerSubdistrict[it._id || "Tidak Diketahui"] = it.count || 0;
-    }
+    const tasksPerTitle = toObject(tasksPerTitleAgg);
+    const tasksPerSubdistrict = toObject(tasksPerSubdistrictAgg);
 
-    // ===== 2) Overdue tasks (>14 hari belum selesai) =====
-    const twoWeeksAgo = new Date();
-    twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
+    // === 5. Overdue Tasks (>7 hari belum selesai) ===
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-    const overdueBaseMatch = {
-      createdAt: { $lte: twoWeeksAgo },
+    const overdueFilter = {
+      $and: [
+        { createdAt: { $gte: startOfYear, $lte: endOfYear } },
+        { createdAt: { $lte: sevenDaysAgo } },
+      ],
       currentStage: { $ne: "selesai" },
-      ...yearFilter,
     };
 
-    const rawNopel = String(req.query.nopel || "").trim();
-    const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const nopelMatch =
-      rawNopel.length > 0
-        ? { "mainData.nopel": { $regex: escapeRegex(rawNopel), $options: "i" } }
-        : {};
+    const searchNopel = (req.query.nopel || "").trim();
+    const nopelFilter = searchNopel
+      ? {
+          "mainData.nopel": {
+            $regex: searchNopel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+            $options: "i",
+          },
+        }
+      : {};
 
-    const overdueTotalAgg = await Task.aggregate([
-      { $match: { ...overdueBaseMatch, ...nopelMatch } },
-      { $count: "total" },
-    ]);
-    const overdueTotal = overdueTotalAgg?.[0]?.total || 0;
-
-    const overdueTasks = await Task.aggregate([
-      { $match: { ...overdueBaseMatch, ...nopelMatch } },
-      { $sort: { createdAt: -1 } },
-      { $skip: skip },
-      { $limit: limit },
-      {
-        $project: {
-          _id: 1,
-          title: 1,
-          createdAt: 1,
-          currentStage: 1,
-          "mainData.nop": 1,
-          "mainData.nopel": 1,
-          additionalData: { $slice: ["$additionalData", 1] },
+    const [overdueCountAgg, overdueList] = await Promise.all([
+      Task.aggregate([
+        { $match: { ...overdueFilter, ...nopelFilter } },
+        { $count: "total" },
+      ]),
+      Task.aggregate([
+        { $match: { ...overdueFilter, ...nopelFilter } },
+        { $sort: { createdAt: -1 } },
+        { $skip: skip },
+        { $limit: itemsPerPage },
+        {
+          $project: {
+            _id: 1,
+            title: 1,
+            createdAt: 1,
+            currentStage: 1,
+            "mainData.nop": 1,
+            "mainData.nopel": 1,
+            additionalData: { $slice: ["$additionalData", 1] },
+          },
         },
-      },
+      ]),
     ]);
 
-    // ===== 3) Weekly Stats (12 minggu terakhir) =====
-    const now = moment().endOf("isoWeek");
-    const start = moment().subtract(11, "weeks").startOf("isoWeek");
+    const overdueTotal = overdueCountAgg?.[0]?.total || 0;
 
-    const weeklyRaw = await Task.aggregate([
+    // === 6. Statistik Mingguan (12 minggu terakhir) ===
+    const endOfWeek = moment().endOf("isoWeek");
+    const startOf12WeeksAgo = moment().subtract(11, "weeks").startOf("isoWeek");
+
+    const weeklyAggregation = await Task.aggregate([
       {
         $match: {
-          createdAt: { $gte: start.toDate(), $lte: now.toDate() },
-          ...yearFilter,
+          $and: [
+            { createdAt: { $gte: startOfYear, $lte: endOfYear } },
+            {
+              createdAt: {
+                $gte: startOf12WeeksAgo.toDate(),
+                $lte: endOfWeek.toDate(),
+              },
+            },
+          ],
         },
       },
       {
@@ -579,36 +759,30 @@ const getAdminDashboardStats = async (req, res) => {
       { $sort: { "_id.year": 1, "_id.week": 1 } },
     ]);
 
-    // Normalisasi agar minggu kosong tetap muncul
-    const weeklyStats = [];
-    for (let i = 0; i < 12; i++) {
-      const weekStart = moment()
+    const weeklyStats = Array.from({ length: 12 }, (_, i) => {
+      const startOfWeek = moment()
         .subtract(11 - i, "weeks")
         .startOf("isoWeek");
-      const weekKey = {
-        year: weekStart.isoWeekYear(),
-        week: weekStart.isoWeek(),
-      };
-      const label = `${weekStart.format("DD MMM")} - ${weekStart
-        .clone()
-        .endOf("isoWeek")
-        .format("DD MMM")}`;
+      const endOfThatWeek = startOfWeek.clone().endOf("isoWeek");
 
-      const found = weeklyRaw.find(
-        (s) => s._id.year === weekKey.year && s._id.week === weekKey.week
+      const label = `${startOfWeek.format("DD")}–${endOfThatWeek.format(
+        "DD MMM"
+      )}`;
+
+      const foundWeek = weeklyAggregation.find(
+        (w) =>
+          w._id.year === startOfWeek.isoWeekYear() &&
+          w._id.week === startOfWeek.isoWeek()
       );
 
-      weeklyStats.push({
-        label,
-        total: found ? found.total : 0,
-      });
-    }
+      return { label, total: foundWeek ? foundWeek.total : 0 };
+    });
 
-    // ===== Response =====
+    // === 7. Response ===
     return res.status(200).json({
-      year: isNaN(year) ? "all" : year,
-      page,
-      limit,
+      year: selectedYear,
+      page: currentPage,
+      limit: itemsPerPage,
       overdueTotal,
       stats: {
         totalTasks,
@@ -618,8 +792,8 @@ const getAdminDashboardStats = async (req, res) => {
         tasksPerTitle,
         tasksPerSubdistrict,
       },
-      overdueTasks,
-      weeklyStats, // ← tambahan baru
+      overdueTasks: overdueList,
+      weeklyStats,
     });
   } catch (error) {
     console.error("Error getting admin dashboard stats:", error);
@@ -630,161 +804,51 @@ const getAdminDashboardStats = async (req, res) => {
   }
 };
 
-// const getAdminDashboardStats = async (req, res) => {
-//   try {
-//     const user = req.user;
-//     if (!user || user.role !== "admin") {
-//       return res.status(403).json({ message: "Forbidden" });
-//     }
-
-//     // Pagination aman untuk UI
-//     const MAX_LIMIT = 100;
-//     const page = Math.max(1, parseInt(req.query.page, 5) || 1);
-//     const limit = Math.min(
-//       MAX_LIMIT,
-//       Math.max(1, parseInt(req.query.limit, 5) || 5)
-//     );
-//     const skip = (page - 1) * limit;
-
-//     // ===== 1) Stats umum (GLOBAL; tidak terpengaruh filter NOPel) =====
-//     const [totalTasks, totalApproved, totalRejected, totalPending] =
-//       await Promise.all([
-//         Task.countDocuments(),
-//         // approved khusus stage "dikirim" (tetap)
-//         Task.countDocuments({
-//           approvals: { $elemMatch: { stage: "dikirim", status: "approved" } },
-//         }),
-//         // rejected di SEMUA stage
-//         Task.countDocuments({
-//           approvals: { $elemMatch: { status: "rejected" } },
-//         }),
-//         // pending khusus stage "dikirim" (tetap)
-//         Task.countDocuments({
-//           approvals: {
-//             $elemMatch: {
-//               stage: "dikirim",
-//               $or: [{ status: "pending" }, { status: null }],
-//             },
-//           },
-//         }),
-//       ]);
-
-//     const [tasksPerTitleAgg, tasksPerSubdistrictAgg] = await Promise.all([
-//       Task.aggregate([{ $group: { _id: "$title", count: { $sum: 1 } } }]),
-//       Task.aggregate([
-//         { $group: { _id: "$mainData.subdistrict", count: { $sum: 1 } } },
-//       ]),
-//     ]);
-
-//     const tasksPerTitle = {};
-//     for (const it of tasksPerTitleAgg) {
-//       tasksPerTitle[it._id || "Tidak Diketahui"] = it.count || 0;
-//     }
-
-//     const tasksPerSubdistrict = {};
-//     for (const it of tasksPerSubdistrictAgg) {
-//       tasksPerSubdistrict[it._id || "Tidak Diketahui"] = it.count || 0;
-//     }
-
-//     // ===== 2) Overdue tasks (>14 hari, belum "selesai") + pagination + SEARCH by NOPel =====
-//     const twoWeeksAgo = new Date();
-//     twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
-
-//     const overdueBaseMatch = {
-//       createdAt: { $lte: twoWeeksAgo },
-//       currentStage: { $ne: "selesai" },
-//     };
-
-//     // ---- Filter by NOPel (opsional, partial, case-insensitive) ----
-//     const rawNopel = String(req.query.nopel || "").trim();
-//     const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-//     const nopelMatch =
-//       rawNopel.length > 0
-//         ? { "mainData.nopel": { $regex: escapeRegex(rawNopel), $options: "i" } }
-//         : {};
-
-//     // Total baris (untuk pagination) — ikut filter NOPel kalau ada
-//     const overdueTotalAgg = await Task.aggregate([
-//       { $match: { ...overdueBaseMatch, ...nopelMatch } },
-//       { $count: "total" },
-//     ]);
-//     const overdueTotal = overdueTotalAgg?.[0]?.total || 0;
-
-//     // Ambil data terpage (ikut filter NOPel kalau ada)
-//     const overdueTasks = await Task.aggregate([
-//       { $match: { ...overdueBaseMatch, ...nopelMatch } },
-//       { $sort: { createdAt: -1 } },
-//       { $skip: skip },
-//       { $limit: limit },
-//       {
-//         $project: {
-//           _id: 1,
-//           title: 1,
-//           createdAt: 1,
-//           currentStage: 1,
-//           "mainData.nop": 1,
-//           "mainData.nopel": 1,
-//           additionalData: { $slice: ["$additionalData", 1] },
-//         },
-//       },
-//     ]);
-
-//     return res.status(200).json({
-//       page,
-//       limit,
-//       overdueTotal, // total baris setelah filter NOPel (jika ada)
-//       stats: {
-//         totalTasks, // global
-//         totalApproved, // global
-//         totalRejected, // global (all-stage)
-//         totalPending, // global
-//         tasksPerTitle, // global
-//         tasksPerSubdistrict, // global
-//       },
-//       overdueTasks, // hasil terfilter & terpage
-//     });
-//   } catch (error) {
-//     console.error("Error getting admin dashboard stats:", error);
-//     return res.status(500).json({
-//       message: "Terjadi kesalahan saat mengambil dashboard admin",
-//       error: error?.message || String(error),
-//     });
-//   }
-// };
-
 // @Deskripsi: Mendapatkan statistik dashboard
 // @Route: GET /api/tasks/user-dashboard
 // @Access: Private
 const getUserDashboardStats = async (req, res) => {
   try {
-    const user = req.user;
-    if (!user) return res.status(401).json({ message: "Unauthorized" });
+    // === 0. Validasi User & Stage ===
+    const { user } = req;
+    if (!user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
 
-    // Stage selalu diambil dari role; tidak ada default.
     const stage = stageMap[(user.role || "").toLowerCase()];
     if (!stage) {
       return res
-        .status(200)
-        .json({ message: "Anda tidak ada di stage manapun" });
+        .status(403)
+        .json({ message: "Anda tidak memiliki stage yang sesuai." });
     }
 
-    // Pagination aman
-    const MAX_LIMIT = 100;
-    const page = Math.max(1, parseInt(req.query.page, 5) || 1);
-    const limit = Math.min(
-      MAX_LIMIT,
-      Math.max(1, parseInt(req.query.limit, 5) || 5)
-    );
-    const skip = (page - 1) * limit;
+    // === 1. Parameter Dasar & Tahun ===
+    const currentYear = new Date().getFullYear();
+    const selectedYear = Number(req.query.year) || currentYear;
 
-    // -------- STATISTIK (hanya untuk stage user) --------
-    const stageApprovedMatch = {
+    const startOfYear = new Date(`${selectedYear}-01-01T00:00:00.000Z`);
+    const endOfYear = new Date(`${selectedYear}-12-31T23:59:59.999Z`);
+    const yearFilter = { createdAt: { $gte: startOfYear, $lte: endOfYear } };
+
+    const MAX_LIMIT = 100;
+    const currentPage = Math.max(1, Number(req.query.page) || 1);
+    const itemsPerPage = Math.min(
+      MAX_LIMIT,
+      Math.max(1, Number(req.query.limit) || 5)
+    );
+    const skip = (currentPage - 1) * itemsPerPage;
+
+    // === 2. Filter Stage ===
+    const approvedFilter = {
+      ...yearFilter,
       approvals: { $elemMatch: { stage, status: "approved" } },
     };
-    const stageRejectedMatch = {
+    const rejectedFilter = {
+      ...yearFilter,
       approvals: { $elemMatch: { stage, status: "rejected" } },
     };
-    const stagePendingMatch = {
+    const pendingFilter = {
+      ...yearFilter,
       approvals: {
         $elemMatch: {
           stage,
@@ -797,115 +861,95 @@ const getUserDashboardStats = async (req, res) => {
       },
     };
 
+    // === 3. Hitung Statistik Dasar ===
     const [totalApproved, totalRejected, totalPending] = await Promise.all([
-      Task.countDocuments(stageApprovedMatch),
-      Task.countDocuments(stageRejectedMatch),
-      Task.countDocuments(stagePendingMatch),
-    ]);
-    const totalTask = totalApproved + totalRejected + totalPending;
-
-    // Per title (yang sudah approved di stage user)
-    const tasksPerTitleAgg = await Task.aggregate([
-      { $match: stageApprovedMatch },
-      { $group: { _id: "$title", count: { $sum: 1 } } },
+      Task.countDocuments(approvedFilter),
+      Task.countDocuments(rejectedFilter),
+      Task.countDocuments(pendingFilter),
     ]);
 
-    // Per kecamatan (yang sudah approved di stage user)
-    const tasksPerSubdistrictAgg = await Task.aggregate([
-      { $match: stageApprovedMatch },
-      { $group: { _id: "$mainData.subdistrict", count: { $sum: 1 } } },
+    const totalTasks = totalApproved + totalRejected + totalPending;
+
+    // === 4. Statistik per Jenis & Kecamatan ===
+    const [titleAgg, subdistrictAgg] = await Promise.all([
+      Task.aggregate([
+        { $match: approvedFilter },
+        { $group: { _id: "$title", count: { $sum: 1 } } },
+      ]),
+      Task.aggregate([
+        { $match: approvedFilter },
+        { $group: { _id: "$mainData.subdistrict", count: { $sum: 1 } } },
+      ]),
     ]);
 
-    const tasksPerTitle = {};
-    for (const it of tasksPerTitleAgg) {
-      tasksPerTitle[it._id || "Tidak Diketahui"] = it.count || 0;
-    }
-    const tasksPerSubdistrict = {};
-    for (const it of tasksPerSubdistrictAgg) {
-      tasksPerSubdistrict[it._id || "Tidak Diketahui"] = it.count || 0;
-    }
+    const toObject = (arr, label = "Tidak Diketahui") =>
+      arr.reduce((obj, i) => {
+        obj[i._id || label] = i.count || 0;
+        return obj;
+      }, {});
 
-    // -------- DAFTAR SEMUA DOKUMEN YG PERNAH APPROVED (stage manapun) + search NOPel --------
-    const rawNopel = String(req.query.nopel || "").trim();
-    const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    const nopelMatch = rawNopel
-      ? { "mainData.nopel": { $regex: escapeRegex(rawNopel), $options: "i" } }
+    const tasksPerTitle = toObject(titleAgg);
+    const tasksPerSubdistrict = toObject(subdistrictAgg);
+
+    // === 5. Filter NOPel (Search) ===
+    const searchNopel = String(req.query.nopel || "").trim();
+    const nopelFilter = searchNopel
+      ? {
+          "mainData.nopel": {
+            $regex: searchNopel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+            $options: "i",
+          },
+        }
       : {};
 
-    const approvedAnyStageMatch = {
-      approvals: { $elemMatch: { status: "approved" } },
-    };
-
-    // Total untuk pagination (ikut filter nopel)
-    const approvedTotalAgg = await Task.aggregate([
-      { $match: { ...approvedAnyStageMatch, ...nopelMatch } },
-      { $count: "total" },
+    // === 6. Ambil Daftar Approved Tasks ===
+    const [approvedTotalAgg, approvedList] = await Promise.all([
+      Task.aggregate([
+        { $match: { ...approvedFilter, ...nopelFilter } },
+        { $count: "total" },
+      ]),
+      Task.aggregate([
+        { $match: { ...approvedFilter, ...nopelFilter } },
+        { $sort: { createdAt: -1 } },
+        { $skip: skip },
+        { $limit: itemsPerPage },
+        {
+          $project: {
+            _id: 1,
+            title: 1,
+            createdAt: 1,
+            currentStage: 1,
+            "mainData.nop": 1,
+            "mainData.nopel": 1,
+            additionalData: { $slice: ["$additionalData", 1] },
+          },
+        },
+      ]),
     ]);
+
     const approvedTotal = approvedTotalAgg?.[0]?.total || 0;
 
-    // Ambil daftar (urut berdasarkan approved terbaru pada approval manapun)
-    const approvedTasks = await Task.aggregate([
-      { $match: { ...approvedAnyStageMatch, ...nopelMatch } },
-      {
-        $addFields: {
-          approvedItems: {
-            $filter: {
-              input: "$approvals",
-              as: "a",
-              cond: { $eq: ["$$a.status", "approved"] },
-            },
-          },
-        },
-      },
-      {
-        $addFields: {
-          latestApprovedAt: {
-            $max: {
-              $map: {
-                input: "$approvedItems",
-                as: "ai",
-                in: { $ifNull: ["$$ai.updatedAt", "$$ai.createdAt"] },
-              },
-            },
-          },
-        },
-      },
-      { $sort: { latestApprovedAt: -1, createdAt: -1 } },
-      { $skip: skip },
-      { $limit: limit },
-      {
-        $project: {
-          _id: 1,
-          title: 1,
-          createdAt: 1,
-          currentStage: 1,
-          "mainData.nop": 1,
-          "mainData.nopel": 1,
-          additionalData: { $slice: ["$additionalData", 1] },
-          latestApprovedAt: 1,
-        },
-      },
-    ]);
-
+    // === 7. Response ===
     return res.status(200).json({
-      page,
-      limit,
-      approvedTotal, // total daftar “semua yang pernah approved”
-      stage, // diambil dinamis dari role
+      year: selectedYear,
+      page: currentPage,
+      limit: itemsPerPage,
+      stage,
+      approvedTotal,
       stats: {
-        totalTask, // akumulasi status pada stage user
-        totalApproved, // approved di stage user
-        totalRejected, // rejected di stage user
-        totalPending, // pending/null di stage user
-        tasksPerTitle, // hanya yang approved di stage user
-        tasksPerSubdistrict, // hanya yang approved di stage user
+        totalTasks,
+        totalApproved,
+        totalRejected,
+        totalPending,
+        tasksPerTitle,
+        tasksPerSubdistrict,
       },
-      approvedTasks, // list: approved di stage manapun, bisa di-search NOPel
+      approvedTasks: approvedList,
     });
   } catch (error) {
     console.error("Error getting user dashboard stats:", error);
     return res.status(500).json({
-      message: "Terjadi kesalahan saat mengambil dashboard user",
+      message: "Terjadi kesalahan saat mengambil data dashboard user.",
       error: error?.message || String(error),
     });
   }
@@ -914,21 +958,27 @@ const getUserDashboardStats = async (req, res) => {
 // @Deskripsi: Mendapatkan all task
 // @Route: GET /api/tasks
 // @Access: Private
-const getAllTask = async (req, res) => {
+const getAllTasks = async (req, res) => {
   try {
-    const user = req.user;
-    if (!user) return res.status(401).json({ message: "Unauthorized" });
+    const currentUser = req.user;
+    if (!currentUser) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
 
-    const isAdmin = String(user.role || "").toLowerCase() === "admin";
+    // --- Role-based filter
+    const userRole = String(currentUser.role || "").toLowerCase();
+    const isAdmin = userRole === "admin";
     const query = {};
+
     if (!isAdmin) {
-      const stage = stageMap[(user.role || "").toLowerCase()];
-      if (!stage)
+      const stage = stageMap[userRole];
+      if (!stage) {
         return res.status(403).json({ message: "Role tidak dikenali." });
+      }
       query.currentStage = stage;
     }
 
-    // --- Filters
+    // --- Extract filter params
     const { nopel, title, startDate, endDate } = req.query;
 
     if (nopel) {
@@ -936,21 +986,22 @@ const getAllTask = async (req, res) => {
     }
 
     if (title) {
-      const normalized = String(title).replace(/[_\s]+/g, ".*");
-      query.title = { $regex: normalized, $options: "i" };
+      const normalizedTitle = String(title).replace(/[_\s]+/g, ".*");
+      query.title = { $regex: normalizedTitle, $options: "i" };
     }
 
     if (startDate || endDate) {
       query.createdAt = {};
       if (startDate) query.createdAt.$gte = new Date(startDate);
+
       if (endDate) {
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
-        query.createdAt.$lte = end;
+        const endDateObj = new Date(endDate);
+        endDateObj.setHours(23, 59, 59, 999);
+        query.createdAt.$lte = endDateObj;
       }
     }
 
-    // --- Pagination & Sorting
+    // --- Pagination setup
     const MAX_LIMIT = 100;
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const limit = Math.min(
@@ -959,16 +1010,18 @@ const getAllTask = async (req, res) => {
     );
     const skip = (page - 1) * limit;
 
-    const allowSortBy = new Set(["createdAt"]);
-    const sortBy = allowSortBy.has(String(req.query.sortBy))
-      ? String(req.query.sortBy)
+    // --- Sorting setup
+    const ALLOWED_SORT_FIELDS = ["createdAt"];
+    const sortField = ALLOWED_SORT_FIELDS.includes(req.query.sortBy)
+      ? req.query.sortBy
       : "createdAt";
-    const order =
+    const sortOrder =
       String(req.query.order || "desc").toLowerCase() === "asc" ? 1 : -1;
-    const sort = { [sortBy]: order };
 
-    // --- Query tasks
-    const [tasks, total] = await Promise.all([
+    const sort = { [sortField]: sortOrder };
+
+    // --- Query database
+    const [tasks, totalCount] = await Promise.all([
       Task.find(query)
         .sort(sort)
         .skip(skip)
@@ -987,33 +1040,32 @@ const getAllTask = async (req, res) => {
       Task.countDocuments(query),
     ]);
 
-    // --- Tambahkan status human-readable (ditolak/diproses/selesai)
-    const enhancedTasks = tasks.map((task) => {
-      let status = "Diproses"; // default
-
-      const isRejected = task.approvals?.some((a) => a.status === "rejected");
-      const isCompleted =
+    // --- Enhance with readable status
+    const formattedTasks = tasks.map((task) => {
+      const hasRejection = task.approvals?.some(
+        (approval) => approval.status === "rejected"
+      );
+      const isFinished =
         task.currentStage === "selesai" || task.isCompleted === true;
 
-      if (isRejected) status = "Ditolak";
-      else if (isCompleted) status = "Selesai";
+      let status = "Diproses";
+      if (hasRejection) status = "Ditolak";
+      else if (isFinished) status = "Selesai";
 
-      return {
-        ...task,
-        status,
-      };
+      return { ...task, status };
     });
 
+    // --- Final response
     return res.status(200).json({
       page,
       limit,
-      total,
-      sortBy,
-      order: order === 1 ? "asc" : "desc",
-      tasks: enhancedTasks,
+      total: totalCount,
+      sortBy: sortField,
+      order: sortOrder === 1 ? "asc" : "desc",
+      tasks: formattedTasks,
     });
   } catch (error) {
-    console.error("Error getting all tasks:", error);
+    console.error("Error fetching tasks:", error);
     return res.status(500).json({
       message: "Terjadi kesalahan saat mengambil data task",
       error: error?.message || String(error),
@@ -1021,116 +1073,36 @@ const getAllTask = async (req, res) => {
   }
 };
 
-// const getAllTask = async (req, res) => {
-//   try {
-//     const user = req.user;
-//     if (!user) return res.status(401).json({ message: "Unauthorized" });
-
-//     // --- Role → stage filter (non-admin dibatasi stage)
-//     const isAdmin = String(user.role || "").toLowerCase() === "admin";
-//     const query = {};
-//     if (!isAdmin) {
-//       const stage = stageMap[(user.role || "").toLowerCase()];
-//       if (!stage)
-//         return res.status(403).json({ message: "Role tidak dikenali." });
-//       query.currentStage = stage;
-//     }
-
-//     // --- Filters
-//     const { nopel, title, startDate, endDate } = req.query;
-
-//     if (nopel) {
-//       query["mainData.nopel"] = { $regex: String(nopel), $options: "i" };
-//     }
-
-//     if (title) {
-//       // ganti spasi/underscore jadi wildcard agar fleksibel
-//       const normalized = String(title).replace(/[_\s]+/g, ".*");
-//       query.title = { $regex: normalized, $options: "i" };
-//     }
-
-//     if (startDate || endDate) {
-//       query.createdAt = {};
-//       if (startDate) query.createdAt.$gte = new Date(startDate);
-//       if (endDate) {
-//         const end = new Date(endDate);
-//         end.setHours(23, 59, 59, 999);
-//         query.createdAt.$lte = end;
-//       }
-//     }
-
-//     // --- Pagination & Sorting (aman untuk produksi)
-//     const MAX_LIMIT = 100;
-//     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
-//     const limit = Math.min(
-//       MAX_LIMIT,
-//       Math.max(1, parseInt(req.query.limit, 10) || 10)
-//     );
-//     const skip = (page - 1) * limit;
-
-//     // hanya izinkan sortBy tertentu (di sini fokus createdAt)
-//     const allowSortBy = new Set(["createdAt"]);
-//     const sortBy = allowSortBy.has(String(req.query.sortBy))
-//       ? String(req.query.sortBy)
-//       : "createdAt";
-
-//     // order: asc|desc → 1|-1 (default desc)
-//     const order =
-//       String(req.query.order || "desc").toLowerCase() === "asc" ? 1 : -1;
-//     const sort = { [sortBy]: order };
-
-//     // --- Query & total (parallel)
-//     const [tasks, total] = await Promise.all([
-//       Task.find(query)
-//         .sort(sort)
-//         .skip(skip)
-//         .limit(limit)
-//         .select({
-//           _id: 1,
-//           title: 1,
-//           createdAt: 1,
-//           currentStage: 1,
-//           "mainData.nop": 1,
-//           "mainData.nopel": 1,
-//           additionalData: { $slice: ["$additionalData", 1] }, // ramping: ambil elemen pertama
-//         })
-//         .lean(),
-//       Task.countDocuments(query),
-//     ]);
-
-//     return res.status(200).json({
-//       page,
-//       limit,
-//       total, // total baris (tanpa paginasi)
-//       sortBy, // echo back agar mudah di UI
-//       order: order === 1 ? "asc" : "desc",
-//       tasks,
-//     });
-//   } catch (error) {
-//     console.error("Error getting all tasks:", error);
-//     return res.status(500).json({
-//       message: "Terjadi kesalahan saat mengambil data task",
-//       error: error?.message || String(error),
-//     });
-//   }
-// };
-
 // @Deskripsi: Mengambil 1 task berdasarkan ID (untuk halaman publik)
 // @Route: GET /api/tasks/:id
 // @Access: Public
 const getTaskById = async (req, res) => {
   try {
-    const { taskId } = req.params;
+    const user = req.user; // dari middleware protect
+    if (!user) {
+      return res
+        .status(401)
+        .json({ message: "Akses ditolak. Harap login terlebih dahulu." });
+    }
 
-    // Ambil data; exclude __v (opsional)
+    const { taskId } = req.params;
+    if (!taskId) {
+      return res.status(400).json({ message: "Parameter taskId wajib diisi." });
+    }
+
+    // Ambil data task (tanpa field internal seperti __v)
     const task = await Task.findById(taskId).select("-__v").lean();
     if (!task) {
       return res.status(404).json({ message: "Task tidak ditemukan." });
     }
 
-    // Hitung rejectedStage secara aman
+    // Pastikan approvals valid array
     const approvals = Array.isArray(task.approvals) ? task.approvals : [];
-    const rejectedApproval = approvals.find((a) => a?.status === "rejected");
+
+    // Cek apakah ada tahap yang berstatus 'rejected'
+    const rejectedApproval = approvals.find(
+      (approval) => approval?.status === "rejected"
+    );
 
     // Hindari cache data sensitif
     res.set("Cache-Control", "no-store");
@@ -1140,11 +1112,12 @@ const getTaskById = async (req, res) => {
       rejectedStage: rejectedApproval?.stage ?? null,
     });
   } catch (error) {
-    // Tangani CastError dsb dengan status yang tepat
-    const isCastError = error?.name === "CastError";
     console.error("Error getting task by ID:", error);
-    return res.status(isCastError ? 400 : 500).json({
-      message: isCastError
+
+    // Tangani kesalahan ID tidak valid
+    const isInvalidId = error?.name === "CastError";
+    return res.status(isInvalidId ? 400 : 500).json({
+      message: isInvalidId
         ? "ID task tidak valid."
         : "Terjadi kesalahan saat mengambil detail task.",
       error: error.message,
@@ -1155,366 +1128,161 @@ const getTaskById = async (req, res) => {
 // @Deskripsi: Menampilkan kinerja semua user per stage dan per title
 // @Route: GET /api/tasks/user-performance
 // @Access: Private (admin saja)
-// Pastikan tersedia:
-// const Task = require(".../models/Task");
-// const stageOrder = ["diinput","ditata","diteliti","diarsipkan","dikirim","selesai"];
 const getAllUserPerformance = async (req, res) => {
   try {
-    const me = req.user;
-    if (!me || me.role !== "admin") {
+    const currentUser = req.user;
+    if (!currentUser || currentUser.role !== "admin") {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
+    // Ambil semua task beserta approval dan user yang menyetujui
     const tasks = await Task.find({})
       .select(
-        "title approvals.stage approvals.status approvals.approvedAt approvals.createdAt approvals.updatedAt approvals.approverId"
+        "title approvals.createdAt approvals.updatedAt approvals.approvedAt approvals.stage approvals.status approvals.approverId"
       )
       .populate("approvals.approverId", "name role")
       .lean();
 
-    // konfigurasi awal
-    const SLA_DAYS = 2; // contoh SLA 2 hari
+    const SLA_DAYS = 2;
     const SLA_MS = SLA_DAYS * 24 * 60 * 60 * 1000;
 
-    const kpi = {}; // hasil utama KPI per stage
-    const complianceResults = { total: 0, compliant: 0 };
+    // Hanya 5 stage yang valid
+    const stageOrderInPerformance = [
+      "diinput",
+      "ditata",
+      "diteliti",
+      "diarsipkan",
+      "dikirim",
+    ];
 
-    for (const stage of stageOrder) {
-      kpi[stage] = {
-        stage,
-        totalTasks: 0,
-        approvedCount: 0,
-        rejectedCount: 0,
-        pendingCount: 0,
-        totalProcessingTimeMs: 0,
-        onTimeCount: 0,
-      };
+    // Struktur data KPI
+    const performanceByStageAndUser = {};
+    const globalDurations = [];
+
+    for (const stage of stageOrderInPerformance) {
+      performanceByStageAndUser[stage] = {};
     }
 
+    // Iterasi semua task
     for (const task of tasks) {
       const approvals = task.approvals || [];
 
-      // (1) Compliance Check: urutan stage harus sesuai stageOrder
-      let lastStageIdx = -1;
-      let compliant = true;
+      // Cari waktu dari tahap awal sampai dikirim (untuk rata-rata global)
+      const startApproval = approvals.find((a) => a.stage === "diinput");
+      const endApproval = approvals.find((a) => a.stage === "dikirim");
 
-      for (const a of approvals) {
-        const currentIdx = stageOrder.indexOf(a.stage);
-        if (currentIdx < lastStageIdx) {
-          compliant = false;
-          break;
-        }
-        lastStageIdx = currentIdx;
+      if (
+        startApproval &&
+        endApproval &&
+        endApproval.approvedAt &&
+        startApproval.createdAt
+      ) {
+        const totalTimeMs =
+          new Date(endApproval.approvedAt) - new Date(startApproval.createdAt);
+        if (totalTimeMs > 0) globalDurations.push(totalTimeMs);
       }
 
-      complianceResults.total += 1;
-      if (compliant) complianceResults.compliant += 1;
+      // Hitung KPI per user per tahap
+      for (const approval of approvals) {
+        const stage = approval.stage;
+        const approver = approval.approverId;
 
-      // (2) Hitung per stage
-      for (const a of approvals) {
-        const stage = a.stage;
-        const stageStat = kpi[stage];
-        if (!stageStat) continue;
+        if (!stageOrderInPerformance.includes(stage) || !approver) continue; // Hanya stage valid
 
-        stageStat.totalTasks += 1;
+        const userId = String(approver._id);
+        const userName = approver.name;
+        const userRole = approver.role;
 
-        if (a.status === "approved") {
-          stageStat.approvedCount += 1;
-          const t0 = a.createdAt || a.updatedAt;
-          const t1 = a.approvedAt || a.updatedAt;
-          if (t0 && t1) {
-            const delta = new Date(t1).getTime() - new Date(t0).getTime();
-            if (delta > 0 && Number.isFinite(delta)) {
-              stageStat.totalProcessingTimeMs += delta;
-              if (delta <= SLA_MS) stageStat.onTimeCount += 1;
+        if (!performanceByStageAndUser[stage][userId]) {
+          performanceByStageAndUser[stage][userId] = {
+            userId,
+            userName,
+            userRole,
+            totalTasks: 0,
+            approvedCount: 0,
+            rejectedCount: 0,
+            pendingCount: 0,
+            totalProcessingTimeMs: 0,
+            onTimeCount: 0,
+          };
+        }
+
+        const record = performanceByStageAndUser[stage][userId];
+        record.totalTasks += 1;
+
+        if (approval.status === "approved") {
+          record.approvedCount += 1;
+
+          const startTime = approval.createdAt || approval.updatedAt;
+          const endTime = approval.approvedAt || approval.updatedAt;
+
+          if (startTime && endTime) {
+            const duration = new Date(endTime) - new Date(startTime);
+            if (duration > 0 && Number.isFinite(duration)) {
+              record.totalProcessingTimeMs += duration;
+              if (duration <= SLA_MS) record.onTimeCount += 1;
             }
           }
-        } else if (a.status === "rejected") {
-          stageStat.rejectedCount += 1;
-        } else if (a.status === "pending") {
-          stageStat.pendingCount += 1;
+        } else if (approval.status === "rejected") {
+          record.rejectedCount += 1;
+        } else {
+          record.pendingCount += 1;
         }
       }
     }
 
-    // (3) Kalkulasi rasio KPI
-    const stageResults = stageOrder.map((stage) => {
-      const s = kpi[stage];
-      const throughputRate =
-        s.totalTasks > 0 ? (s.approvedCount / s.totalTasks) * 100 : 0;
-      const rejectionRate =
-        s.totalTasks > 0 ? (s.rejectedCount / s.totalTasks) * 100 : 0;
-      const onTimeRate =
-        s.approvedCount > 0 ? (s.onTimeCount / s.approvedCount) * 100 : 0;
-      const avgProcessingTimeMs =
-        s.approvedCount > 0 ? s.totalProcessingTimeMs / s.approvedCount : 0;
-      const avgDays = +(avgProcessingTimeMs / 86_400_000).toFixed(2);
-
+    // Ubah ke array untuk dikirim ke frontend
+    const kpiPerStage = stageOrderInPerformance.map((stage) => {
+      const users = Object.values(performanceByStageAndUser[stage] || {});
       return {
-        stage: s.stage,
-        totalTasks: s.totalTasks,
-        approvedCount: s.approvedCount,
-        rejectedCount: s.rejectedCount,
-        pendingCount: s.pendingCount,
-        throughputRate: +throughputRate.toFixed(2),
-        rejectionRate: +rejectionRate.toFixed(2),
-        onTimeRate: +onTimeRate.toFixed(2),
-        avgProcessingTimeDays: avgDays,
+        stage,
+        users: users.map((user) => {
+          const avgProcessingTimeMs =
+            user.approvedCount > 0
+              ? user.totalProcessingTimeMs / user.approvedCount
+              : 0;
+          const avgDays = +(avgProcessingTimeMs / 86_400_000).toFixed(2);
+
+          const onTimeRate =
+            user.approvedCount > 0
+              ? (user.onTimeCount / user.approvedCount) * 100
+              : 0;
+
+          return {
+            userId: user.userId,
+            userName: user.userName,
+            userRole: user.userRole,
+            totalTasks: user.totalTasks,
+            approvedCount: user.approvedCount,
+            rejectedCount: user.rejectedCount,
+            pendingCount: user.pendingCount,
+            avgProcessingTimeDays: avgDays,
+            onTimeRate: +onTimeRate.toFixed(2),
+          };
+        }),
       };
     });
 
-    // (4) Compliance Rate keseluruhan
-    const complianceRate =
-      complianceResults.total > 0
-        ? (complianceResults.compliant / complianceResults.total) * 100
+    // Hitung rata-rata global dari awal sampai tahap dikirim
+    const globalAvgMs =
+      globalDurations.length > 0
+        ? globalDurations.reduce((a, b) => a + b, 0) / globalDurations.length
         : 0;
+    const globalAvgDays = +(globalAvgMs / 86_400_000).toFixed(2);
 
-    // (5) Hasil akhir
     res.status(200).json({
       summary: {
-        totalTasks: complianceResults.total,
-        complianceRate: +complianceRate.toFixed(2),
+        totalTasks: tasks.length,
+        avgDaysUntilSent: globalAvgDays,
+        withinTarget: globalAvgDays <= 7,
       },
-      kpiPerStage: stageResults,
+      kpiPerStage,
     });
   } catch (error) {
     console.error("Error in getAllUserPerformance:", error);
     res.status(500).json({
       message: "Terjadi kesalahan saat mengambil performa user",
       error: error?.message || String(error),
-    });
-  }
-};
-
-// const getAllUserPerformance = async (req, res) => {
-//   try {
-//     const me = req.user;
-//     if (!me && me.role !== "admin") return res.status(401).json({ message: "Unauthorized" });
-
-//     if (!Array.isArray(stageOrder) || stageOrder.length < 2) {
-//       return res.status(500).json({ message: "Konfigurasi stageOrder tidak valid." });
-//     }
-
-//     // Ambil data minimal + nama/role approver (untuk rekap & performa)
-//     const tasks = await Task.find({})
-//       .select(
-//         "title approvals.stage approvals.status approvals.approvedAt approvals.createdAt approvals.updatedAt approvals.approverId"
-//       )
-//       .populate("approvals.approverId", "name role")
-//       .lean();
-
-//     // (a) Rekap APPROVED per stage → title
-//     // Hanya approved yang dihitung pada 'count'. Admin tidak dimasukkan di daftar users.
-//     const statsPerStage = Object.create(null);
-//     // agregasi internal untuk daftar user non-admin per stage-title
-//     const userAgg = Object.create(null); // userAgg[stage][title][userId] = { userId, name, role, count }
-
-//     // (b) Performa user non-admin: rata-rata waktu dari stage → stage berikutnya
-//     const performance = Object.create(null); // performance[stage][userId] = { userId, name, role, totalMs, n }
-
-//     const getApprovalFor = (approvals = [], stage) =>
-//       approvals.find((a) => a?.stage === stage);
-//     const pickTime = (a) => a?.approvedAt || a?.updatedAt || a?.createdAt || null;
-
-//     for (const task of tasks) {
-//       const title = task?.title || "Tidak diketahui";
-//       const approvals = Array.isArray(task?.approvals) ? task.approvals : [];
-
-//       for (const a of approvals) {
-//         const stage = a?.stage;
-//         if (!stage) continue;
-
-//         // siapkan container rekap
-//         if (!statsPerStage[stage]) statsPerStage[stage] = Object.create(null);
-//         if (!statsPerStage[stage][title]) {
-//           statsPerStage[stage][title] = {
-//             approved: { count: 0, users: [] },
-//             rejected: { count: 0, users: [] }, // diset nol agar kompatibel UI lama
-//             pending:  { count: 0, users: [] }, // diset nol agar kompatibel UI lama
-//             total: 0,
-//           };
-//         }
-//         if (!userAgg[stage]) userAgg[stage] = Object.create(null);
-//         if (!userAgg[stage][title]) userAgg[stage][title] = Object.create(null);
-
-//         // (a) Hitung hanya yang approved
-//         if (a?.status === "approved") {
-//           // Tambah jumlah dokumen approved (independen dari role, termasuk admin)
-//           const slot = statsPerStage[stage][title];
-//           slot.approved.count += 1;
-//           slot.total = slot.approved.count;
-
-//           // Catat user non-admin
-//           const approver = a?.approverId;
-//           const role = String(approver?.role || "").toLowerCase();
-//           if (approver?._id && role !== "admin") {
-//             const uid = String(approver._id);
-//             if (!userAgg[stage][title][uid]) {
-//               userAgg[stage][title][uid] = {
-//                 userId: approver._id,
-//                 name: approver.name || "Tidak diketahui",
-//                 role: approver.role || "",
-//                 count: 0,
-//               };
-//             }
-//             userAgg[stage][title][uid].count += 1;
-//           }
-//         }
-
-//         // (b) Performa: durasi approved stage ini → approved stage berikutnya (non-admin saja)
-//         if (a?.status === "approved" && a?.approverId) {
-//           const approverRole = String(a.approverId.role || "").toLowerCase();
-//           if (approverRole === "admin") continue; // exclude admin dari metrik performa
-
-//           const t0 = pickTime(a);
-//           if (!t0) continue;
-
-//           const idx = stageOrder.indexOf(stage);
-//           if (idx >= 0 && idx < stageOrder.length - 1) {
-//             const nextStage = stageOrder[idx + 1];
-//             const nextApproval = getApprovalFor(approvals, nextStage);
-//             const t1 = pickTime(nextApproval);
-
-//             if (nextApproval?.status === "approved" && t1) {
-//               const deltaMs = new Date(t1).getTime() - new Date(t0).getTime();
-//               if (Number.isFinite(deltaMs) && deltaMs > 0) {
-//                 if (!performance[stage]) performance[stage] = Object.create(null);
-//                 const uid = String(a.approverId._id);
-//                 if (!performance[stage][uid]) {
-//                   performance[stage][uid] = {
-//                     userId: a.approverId._id,
-//                     name: a.approverId.name || "Tidak diketahui",
-//                     role: a.approverId.role || "",
-//                     totalMs: 0,
-//                     n: 0,
-//                   };
-//                 }
-//                 performance[stage][uid].totalMs += deltaMs;
-//                 performance[stage][uid].n += 1;
-//               }
-//             }
-//           }
-//         }
-//       }
-//     }
-
-//     // Konversi agregat user → array terurut (kontributor terbanyak dulu)
-//     for (const stage of Object.keys(userAgg)) {
-//       for (const title of Object.keys(userAgg[stage])) {
-//         const users = Object.values(userAgg[stage][title]).sort(
-//           (a, b) => b.count - a.count || a.name.localeCompare(b.name)
-//         );
-//         statsPerStage[stage][title].approved.users = users;
-//       }
-//     }
-
-//     // Rata-rata performa & urutkan tercepat → terlama
-//     const performancePerStage = Object.create(null);
-//     for (const stage of Object.keys(performance)) {
-//       const byUser = Object.values(performance[stage]).map((p) => {
-//         const avgMs = p.n > 0 ? Math.round(p.totalMs / p.n) : 0;
-//         return {
-//           userId: p.userId,
-//           name: p.name,
-//           role: p.role,
-//           count: p.n,
-//           avgMs,
-//           avgHours: +(avgMs / 3_600_000).toFixed(2),
-//           avgDays:  +(avgMs / 86_400_000).toFixed(2),
-//         };
-//       });
-//       byUser.sort((a, b) => a.avgMs - b.avgMs);
-//       performancePerStage[stage] = { byUser };
-//     }
-
-//     res.set("Cache-Control", "no-store");
-//     return res.status(200).json({
-//       statsPerStage,        // count = jumlah approved di stage tsb per title (role apa pun), users = non-admin saja
-//       performancePerStage,  // metrik waktu stage→next per user non-admin
-//     });
-//   } catch (error) {
-//     console.error("Error in getAllUserPerformance:", error);
-//     return res.status(500).json({
-//       message: "Terjadi kesalahan saat mengambil performa semua user",
-//       error: error?.message || String(error),
-//     });
-//   }
-// };
-
-// @Desc: Mengambil jumlah task yang dibuat per minggu (12 minggu terakhir)
-// @Route: GET /api/tasks/stats/weekly
-// @Access: Private (admin only)
-const getWeeklyTaskStats = async (req, res) => {
-  try {
-    const user = req.user;
-
-    // Hanya admin yang boleh akses
-    if (!user || user.role !== "admin") {
-      return res
-        .status(403)
-        .json({ message: "Akses ditolak. Hanya admin yang diperbolehkan." });
-    }
-
-    // Hitung dari 12 minggu terakhir (3 bulan)
-    const now = moment().endOf("isoWeek"); // akhir minggu ini
-    const start = moment().subtract(11, "weeks").startOf("isoWeek"); // 12 minggu lalu
-
-    // Agregasi berdasarkan minggu
-    const stats = await Task.aggregate([
-      {
-        $match: {
-          createdAt: {
-            $gte: start.toDate(),
-            $lte: now.toDate(),
-          },
-        },
-      },
-      {
-        $group: {
-          _id: {
-            year: { $isoWeekYear: "$createdAt" },
-            week: { $isoWeek: "$createdAt" },
-          },
-          total: { $sum: 1 },
-        },
-      },
-      {
-        $sort: { "_id.year": 1, "_id.week": 1 },
-      },
-    ]);
-
-    // Normalisasi data agar minggu yang kosong tetap muncul dengan total = 0
-    const result = [];
-    for (let i = 0; i < 12; i++) {
-      const weekStart = moment()
-        .subtract(11 - i, "weeks")
-        .startOf("isoWeek");
-      const weekKey = {
-        year: weekStart.isoWeekYear(),
-        week: weekStart.isoWeek(),
-      };
-
-      const label = `${weekStart.format("DD MMM")} - ${weekStart
-        .clone()
-        .endOf("isoWeek")
-        .format("DD MMM")}`;
-
-      const found = stats.find(
-        (s) => s._id.year === weekKey.year && s._id.week === weekKey.week
-      );
-
-      result.push({
-        label,
-        total: found ? found.total : 0,
-      });
-    }
-
-    return res.status(200).json(result);
-  } catch (error) {
-    console.error("Gagal mengambil data grafik mingguan:", error);
-    return res.status(500).json({
-      message: "Terjadi kesalahan saat mengambil data grafik mingguan.",
-      error: error.message,
     });
   }
 };
@@ -1526,8 +1294,7 @@ module.exports = {
   deleteTask,
   getAdminDashboardStats,
   getUserDashboardStats,
-  getAllTask,
+  getAllTasks,
   getTaskById,
   getAllUserPerformance,
-  getWeeklyTaskStats,
 };

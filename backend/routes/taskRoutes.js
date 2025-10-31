@@ -6,9 +6,8 @@ const {
   deleteTask,
   getAdminDashboardStats,
   getUserDashboardStats,
-  getAllTask,
+  getAllTasks,
   getTaskById,
-  getWeeklyTaskStats,
   getAllUserPerformance,
 } = require("../controllers/taskControllers");
 const { protect } = require("../middlewares/authMiddlewares");
@@ -16,11 +15,11 @@ const { protect } = require("../middlewares/authMiddlewares");
 const router = express.Router();
 
 // Tambahkan route sesuai kontroller
-router.get("/", protect, getAllTask);
+router.get("/", protect, getAllTasks);
 router.get("/admin-dashboard", protect, getAdminDashboardStats);
 router.get("/user-dashboard", protect, getUserDashboardStats);
 router.get("/user-performance", protect, getAllUserPerformance);
-router.get("/:taskId", getTaskById);
+router.get("/:taskId", protect, getTaskById);
 
 router.post("/create", protect, createTask);
 

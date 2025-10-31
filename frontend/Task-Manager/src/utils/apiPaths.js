@@ -15,7 +15,7 @@ export const API_PATHS = {
     GET_ALL_USER: "/api/users",
   },
   TASK: {
-    GET_DASHBOARD_DATA: "/api/tasks/admin-dashboard",
+    GET_ADMIN_DASHBOARD_DATA: "/api/tasks/admin-dashboard",
     GET_USER_DASHBOARD_DATA: "/api/tasks/user-dashboard",
     GET_ALL_TASKS: "/api/tasks",
     CREATE_TASK: "/api/tasks/create",
@@ -24,7 +24,6 @@ export const API_PATHS = {
     UPDATE_TASK: (taskId) => `/api/tasks/update/${taskId}`,
     DELETE_TASK: (taskId) => `/api/tasks/delete/${taskId}`,
     TEAM_PERFORMANCE: "/api/tasks/user-performance",
-    GET_TASKS_WEEKLY_STATS: "/api/tasks/weekly-task",
   },
   REPORTS: {
     EXPORT_SELECTED_TASKS: "/api/reports/export-selected",
