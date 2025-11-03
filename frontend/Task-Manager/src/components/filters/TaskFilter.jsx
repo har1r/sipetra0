@@ -9,7 +9,9 @@ const TaskFilter = ({
   onFilterSubmit,
   onFilterReset,
   loading = false,
+  userRole,
 }) => {
+  console.log("User Role in TaskFilter:", userRole);
   const idNopel = useId();
   const idTitle = useId();
   const idStartDate = useId();
@@ -48,13 +50,15 @@ const TaskFilter = ({
         </div>
 
         {/* ✅ Ganti dari <a> ke <Link> supaya tidak refresh */}
-        <Link
-          to="/task/create"
-          className="mt-3 inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-200 md:mt-0"
-        >
-          <FaPlus className="h-4 w-4" aria-hidden />
-          <span>Buat Permohonan</span>
-        </Link>
+        {userRole === "penginput" || userRole === "admin" ? (
+          <Link
+            to="/task/create"
+            className="mt-3 inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-200 md:mt-0"
+          >
+            <FaPlus className="h-4 w-4" aria-hidden />
+            <span>Buat Permohonan</span>
+          </Link>
+        ) : null}
       </div>
 
       {/* Body */}

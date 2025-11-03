@@ -140,162 +140,6 @@ const createTask = async (req, res) => {
 // @Deskripsi Mengupdate approval
 // @Route     PATCH /api/tasks/:id/approve
 // @Access    Private (hanya admin dan approver pada stagenya yang bisa approve)
-// const approveTask = async (req, res) => {
-//   try {
-//     const { taskId } = req.params;
-//     const { action, note } = req.body;
-//     const user = req.user;
-
-//     // 1) Validasi input
-//     if (!["approved", "rejected"].includes(action)) {
-//       return res
-//         .status(400)
-//         .json({ message: "Action harus 'approved' atau 'rejected'." });
-//     }
-//     if (!taskId || !mongoose.Types.ObjectId.isValid(taskId)) {
-//       return res.status(400).json({ message: "taskId tidak valid." });
-//     }
-//     const safeNote =
-//       typeof note === "string" ? note.trim().slice(0, 1000) : undefined;
-
-//     // 2) Ambil minimal data (lean) untuk validasi role & status saat ini
-//     const task = await Task.findById(taskId)
-//       .select(
-//         "currentStage approvals isCompleted rejectedStage title mainData.nop mainData.nopel createdAt"
-//       )
-//       .lean();
-
-//     if (!task)
-//       return res.status(404).json({ message: "Task tidak ditemukan." });
-
-//     const currentStage = task.currentStage;
-//     const stageIdx = Array.isArray(stageOrder)
-//       ? stageOrder.indexOf(currentStage)
-//       : -1;
-//     if (stageIdx === -1) {
-//       return res
-//         .status(400)
-//         .json({ message: "Stage saat ini tidak valid pada workflow." });
-//     }
-
-//     const approval = (task.approvals || []).find(
-//       (a) => a?.stage === currentStage
-//     );
-//     if (!approval) {
-//       return res
-//         .status(400)
-//         .json({ message: "Approval stage tidak ditemukan." });
-//     }
-
-//     // 3) Role check: hanya admin atau approver role yg ditetapkan utk stage ini
-//     if (user?.role !== "admin" && user?.role !== approval.approverRole) {
-//       return res
-//         .status(403)
-//         .json({ message: "Anda tidak memiliki izin untuk approve stage ini." });
-//     }
-
-//     // 4) Hanya izinkan dua skenario:
-//     //    - first action (status 'pending')
-//     //    - overwrite dari 'rejected'
-//     if (!["pending", "rejected"].includes(approval.status || "pending")) {
-//       return res.status(400).json({
-//         message:
-//           "Overwrite hanya diizinkan dari status 'rejected' (atau aksi pertama dari 'pending').",
-//       });
-//     }
-
-//     // 5) Hitung next stage bila approved
-//     const lastIdx = stageOrder.length - 1;
-//     const nextStage =
-//       action === "approved"
-//         ? stageIdx < lastIdx
-//           ? stageOrder[stageIdx + 1]
-//           : "selesai"
-//         : currentStage;
-
-//     // 6) Siapkan operasi update atomik pada elemen approval yang MATCH stage aktif + status awal yang sama
-//     const setOps = {
-//       "approvals.$.status": action,
-//       "approvals.$.approvedAt": new Date(),
-//       "approvals.$.approverId": user._id,
-//     };
-//     if (safeNote) setOps["approvals.$.note"] = safeNote;
-
-//     if (action === "approved") {
-//       setOps.currentStage = nextStage;
-//       setOps.isCompleted = nextStage === "selesai";
-//       setOps.rejectedStage = null;
-//     } else {
-//       setOps.isCompleted = false;
-//       setOps.rejectedStage = currentStage;
-//     }
-
-//     const updateDoc = {
-//       $set: setOps,
-//       $push: {
-//         "approvals.$.history": {
-//           prevStatus: approval.status || "pending",
-//           newStatus: action,
-//           at: new Date(),
-//           by: user._id,
-//           note: safeNote ?? null,
-//           type:
-//             (approval.status || "pending") === "pending"
-//               ? "approve"
-//               : "overwrite",
-//         },
-//       },
-//     };
-
-//     // Penting: pakai $elemMatch agar positional `$` mengacu ke elemen yang sama (stage & status awal)
-//     const query = {
-//       _id: taskId,
-//       currentStage,
-//       approvals: {
-//         $elemMatch: {
-//           stage: currentStage,
-//           status: approval.status || "pending",
-//         },
-//       },
-//     };
-
-//     const updated = await Task.findOneAndUpdate(query, updateDoc, {
-//       new: true,
-//       runValidators: true,
-//       projection: {
-//         _id: 1,
-//         title: 1,
-//         currentStage: 1,
-//         isCompleted: 1,
-//         rejectedStage: 1,
-//         "mainData.nop": 1,
-//         "mainData.nopel": 1,
-//         approvals: 1,
-//         createdAt: 1,
-//       },
-//     });
-
-//     if (!updated) {
-//       // Bisa karena status sudah berubah oleh user lain (race) atau stage bergeser.
-//       return res.status(409).json({
-//         message:
-//           "Task berubah di server (stage/status tidak lagi sesuai). Muat ulang data lalu coba lagi.",
-//       });
-//     }
-
-//     res.set("Cache-Control", "no-store");
-//     return res.status(200).json({
-//       message: `Task ${action} di stage '${currentStage}'.`,
-//       task: updated,
-//     });
-//   } catch (error) {
-//     console.error("Error approving task:", error);
-//     return res.status(500).json({
-//       message: "Terjadi kesalahan saat approve task.",
-//       error: error?.message || String(error),
-//     });
-//   }
-// };
 const approveTask = async (req, res) => {
   try {
     const { taskId } = req.params;
@@ -314,10 +158,10 @@ const approveTask = async (req, res) => {
     const safeNote =
       typeof note === "string" ? note.trim().slice(0, 1000) : undefined;
 
-    // 2) Ambil data task
+    // 2) Ambil minimal data (lean) untuk validasi role & status saat ini
     const task = await Task.findById(taskId)
       .select(
-        "currentStage approvals isCompleted rejectedStage title mainData.nop mainData.nopel createdAt noSuratPengantar"
+        "currentStage approvals isCompleted title mainData.nop mainData.nopel createdAt"
       )
       .lean();
 
@@ -325,7 +169,9 @@ const approveTask = async (req, res) => {
       return res.status(404).json({ message: "Task tidak ditemukan." });
 
     const currentStage = task.currentStage;
-    const stageIdx = stageOrder.indexOf(currentStage);
+    const stageIdx = Array.isArray(stageOrder)
+      ? stageOrder.indexOf(currentStage)
+      : -1;
     if (stageIdx === -1) {
       return res
         .status(400)
@@ -333,7 +179,7 @@ const approveTask = async (req, res) => {
     }
 
     const approval = (task.approvals || []).find(
-      (a) => a.stage === currentStage
+      (value) => value?.stage === currentStage
     );
     if (!approval) {
       return res
@@ -341,14 +187,16 @@ const approveTask = async (req, res) => {
         .json({ message: "Approval stage tidak ditemukan." });
     }
 
-    // 3) Role check
-    if (user.role !== "admin" && user.role !== approval.approverRole) {
+    // 3) Role check: hanya admin atau approver role yg ditetapkan utk stage ini
+    if (user?.role !== "admin" && user?.role !== approval.approverRole) {
       return res
         .status(403)
         .json({ message: "Anda tidak memiliki izin untuk approve stage ini." });
     }
 
-    // 4) Hanya izinkan aksi pertama atau overwrite dari rejected
+    // 4) Hanya izinkan dua skenario:
+    //    - first action (status 'pending')
+    //    - overwrite dari 'rejected'
     if (!["pending", "rejected"].includes(approval.status || "pending")) {
       return res.status(400).json({
         message:
@@ -365,7 +213,7 @@ const approveTask = async (req, res) => {
           : "selesai"
         : currentStage;
 
-    // 6) Siapkan operasi update atomik
+    // 6) Siapkan operasi update atomik pada elemen approval yang MATCH stage aktif + status awal yang sama
     const setOps = {
       "approvals.$.status": action,
       "approvals.$.approvedAt": new Date(),
@@ -375,18 +223,7 @@ const approveTask = async (req, res) => {
 
     if (action === "approved") {
       setOps.currentStage = nextStage;
-
-      // Logic khusus stage diteliti: jangan set isCompleted true kalau noSuratPengantar belum ada
-      if (
-        nextStage === "selesai" &&
-        currentStage === "diteliti" &&
-        !task.noSuratPengantar
-      ) {
-        setOps.isCompleted = false; // tetap false
-      } else {
-        setOps.isCompleted = nextStage === "selesai";
-      }
-
+      setOps.isCompleted = nextStage === "selesai";
       setOps.rejectedStage = null;
     } else {
       setOps.isCompleted = false;
@@ -410,7 +247,7 @@ const approveTask = async (req, res) => {
       },
     };
 
-    // 7) Query dengan $elemMatch
+    // Penting: pakai $elemMatch agar positional `$` mengacu ke elemen yang sama (stage & status awal)
     const query = {
       _id: taskId,
       currentStage,
@@ -435,11 +272,11 @@ const approveTask = async (req, res) => {
         "mainData.nopel": 1,
         approvals: 1,
         createdAt: 1,
-        noSuratPengantar: 1,
       },
     });
 
     if (!updated) {
+      // Bisa karena status sudah berubah oleh user lain (race) atau stage bergeser.
       return res.status(409).json({
         message:
           "Task berubah di server (stage/status tidak lagi sesuai). Muat ulang data lalu coba lagi.",
@@ -450,12 +287,6 @@ const approveTask = async (req, res) => {
     return res.status(200).json({
       message: `Task ${action} di stage '${currentStage}'.`,
       task: updated,
-      note:
-        nextStage === "selesai" &&
-        currentStage === "diteliti" &&
-        !task.noSuratPengantar
-          ? "Task sudah lanjut tapi belum bisa dianggap selesai karena nomor surat pengantar belum ada."
-          : undefined,
     });
   } catch (error) {
     console.error("Error approving task:", error);
@@ -465,6 +296,175 @@ const approveTask = async (req, res) => {
     });
   }
 };
+// const approveTask = async (req, res) => {
+//   try {
+//     const { taskId } = req.params;
+//     const { action, note } = req.body;
+//     const user = req.user;
+
+//     // 1) Validasi input
+//     if (!["approved", "rejected"].includes(action)) {
+//       return res
+//         .status(400)
+//         .json({ message: "Action harus 'approved' atau 'rejected'." });
+//     }
+//     if (!taskId || !mongoose.Types.ObjectId.isValid(taskId)) {
+//       return res.status(400).json({ message: "taskId tidak valid." });
+//     }
+//     const safeNote =
+//       typeof note === "string" ? note.trim().slice(0, 1000) : undefined;
+
+//     // 2) Ambil data task
+//     const task = await Task.findById(taskId)
+//       .select(
+//         "currentStage approvals isCompleted title mainData.nop mainData.nopel createdAt noSuratPengantar"
+//       )
+//       .lean();
+
+//     if (!task)
+//       return res.status(404).json({ message: "Task tidak ditemukan." });
+
+//     const currentStage = task.currentStage;
+//     const stageIdx = stageOrder.indexOf(currentStage);
+//     if (stageIdx === -1) {
+//       return res
+//         .status(400)
+//         .json({ message: "Stage saat ini tidak valid pada workflow." });
+//     }
+
+//     const approval = (task.approvals || []).find(
+//       (value) => value.stage === currentStage
+//     );
+//     if (!approval) {
+//       return res
+//         .status(400)
+//         .json({ message: "Approval stage tidak ditemukan." });
+//     }
+
+//     // 3) Role check
+//     if (user.role !== "admin" && user.role !== approval.approverRole) {
+//       return res
+//         .status(403)
+//         .json({ message: "Anda tidak memiliki izin untuk approve stage ini." });
+//     }
+
+//     // 4) Hanya izinkan aksi pertama atau overwrite dari rejected
+//     if (!["pending", "rejected"].includes(approval.status || "pending")) {
+//       return res.status(400).json({
+//         message:
+//           "Overwrite hanya diizinkan dari status 'rejected' (atau aksi pertama dari 'pending').",
+//       });
+//     }
+
+//     // 5) Hitung next stage bila approved
+//     const lastIdx = stageOrder.length - 1;
+//     const nextStage =
+//       action === "approved"
+//         ? stageIdx < lastIdx
+//           ? stageOrder[stageIdx + 1]
+//           : "selesai"
+//         : currentStage;
+
+//     // 6) Siapkan operasi update atomik
+//     const setOps = {
+//       "approvals.$.status": action,
+//       "approvals.$.approvedAt": new Date(),
+//       "approvals.$.approverId": user._id,
+//     };
+//     if (safeNote) setOps["approvals.$.note"] = safeNote;
+
+//     if (action === "approved") {
+//       setOps.currentStage = nextStage;
+
+//       // Logic khusus stage diteliti: jangan set isCompleted true kalau noSuratPengantar belum ada
+//       if (
+//         nextStage === "selesai" &&
+//         currentStage === "diteliti" &&
+//         !task.noSuratPengantar
+//       ) {
+//         setOps.isCompleted = false; // tetap false
+//       } else {
+//         setOps.isCompleted = nextStage === "selesai";
+//       }
+
+//       setOps.rejectedStage = null;
+//     } else {
+//       setOps.isCompleted = false;
+//       setOps.rejectedStage = currentStage;
+//     }
+
+//     const updateDoc = {
+//       $set: setOps,
+//       $push: {
+//         "approvals.$.history": {
+//           prevStatus: approval.status || "pending",
+//           newStatus: action,
+//           at: new Date(),
+//           by: user._id,
+//           note: safeNote ?? null,
+//           type:
+//             (approval.status || "pending") === "pending"
+//               ? "approve"
+//               : "overwrite",
+//         },
+//       },
+//     };
+
+//     // 7) Query dengan $elemMatch
+//     const query = {
+//       _id: taskId,
+//       currentStage,
+//       approvals: {
+//         $elemMatch: {
+//           stage: currentStage,
+//           status: approval.status || "pending",
+//         },
+//       },
+//     };
+
+//     const updated = await Task.findOneAndUpdate(query, updateDoc, {
+//       new: true,
+//       runValidators: true,
+//       projection: {
+//         _id: 1,
+//         title: 1,
+//         currentStage: 1,
+//         isCompleted: 1,
+//         rejectedStage: 1,
+//         "mainData.nop": 1,
+//         "mainData.nopel": 1,
+//         approvals: 1,
+//         createdAt: 1,
+//         noSuratPengantar: 1,
+//       },
+//     });
+
+//     if (!updated) {
+//       return res.status(409).json({
+//         message:
+//           "Task berubah di server (stage/status tidak lagi sesuai). Muat ulang data lalu coba lagi.",
+//       });
+//     }
+
+//     res.set("Cache-Control", "no-store");
+//     return res.status(200).json({
+//       message: `Task ${action} di stage '${currentStage}'.`,
+//       task: updated,
+//       note:
+//         nextStage === "selesai" &&
+//         currentStage === "diteliti" &&
+//         !task.noSuratPengantar
+//           ? "Task sudah lanjut tapi belum bisa dianggap selesai karena nomor surat pengantar belum ada."
+//           : undefined,
+//     });
+//   } catch (error) {
+//     console.error("Error approving task:", error);
+//     return res.status(500).json({
+//       message: "Terjadi kesalahan saat approve task.",
+//       error: error?.message || String(error),
+//     });
+//   }
+// };
 
 // @Deskripsi  Memperbarui data task/berkas
 // @Route      PATCH /api/tasks/:taskId
@@ -960,13 +960,13 @@ const getUserDashboardStats = async (req, res) => {
 // @Access: Private
 const getAllTasks = async (req, res) => {
   try {
-    const currentUser = req.user;
-    if (!currentUser) {
+    const user = req.user;
+    if (!user) {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
     // --- Role-based filter
-    const userRole = String(currentUser.role || "").toLowerCase();
+    const userRole = String(user.role || "").toLowerCase();
     const isAdmin = userRole === "admin";
     const query = {};
 
@@ -1130,8 +1130,8 @@ const getTaskById = async (req, res) => {
 // @Access: Private (admin saja)
 const getAllUserPerformance = async (req, res) => {
   try {
-    const currentUser = req.user;
-    if (!currentUser || currentUser.role !== "admin") {
+    const user = req.user;
+    if (!user || user.role !== "admin") {
       return res.status(401).json({ message: "Unauthorized" });
     }
 

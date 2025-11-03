@@ -5,6 +5,7 @@ import React, {
   useMemo,
   useRef,
   useState,
+  useContext,
 } from "react";
 import { toast } from "react-toastify";
 import DashboardLayout from "../../components/layouts/DashboardLayout";
@@ -14,11 +15,14 @@ import ApprovalModal from "../../components/modals/ApprovalModal";
 import TableSkeleton from "../../components/Skeletons/TableSkeleton";
 import axiosInstance from "../../utils/axiosInstance";
 import { API_PATHS } from "../../utils/apiPaths";
+import { UserContext } from "../../context/UserContexts";
 
 const TaskTable = React.lazy(() => import("../../components/tabels/TaskTable"));
 
 const ManageTasks = () => {
   // === State Utama ===
+  const { user } = useContext(UserContext);
+  const role = String(user?.role || "").toLowerCase();
   const [tasks, setTasks] = useState([]);
   const [totalTasks, setTotalTasks] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
@@ -214,6 +218,7 @@ const ManageTasks = () => {
           loading={isFiltering}
           onFilterSubmit={applyFilterChanges}
           onFilterReset={resetFilters}
+          userRole={role}
         />
 
         {/* Table Section */}

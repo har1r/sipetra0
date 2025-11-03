@@ -225,6 +225,7 @@ const ManageUserTask = () => {
           loading={isFiltering}
           onFilterSubmit={applyFilters}
           onFilterReset={resetFilters}
+          userRole={role}
         />
 
         <Suspense fallback={<TableSkeleton rows={10} cols={9} />}>
