@@ -1,9 +1,13 @@
 import React, { useContext } from "react";
 import { Outlet, Navigate, useLocation } from "react-router-dom";
-import { UserContext } from "../context/UserContexts";
+import UserContext from "../context/UserContexts";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
 
-const normalizeRole = (v) => String(v || "").toLowerCase().trim().replace(/\u00A0/g, "");
+const normalizeRole = (v) =>
+  String(v || "")
+    .toLowerCase()
+    .trim()
+    .replace(/\u00A0/g, "");
 
 export default function PrivateRoute({ allowedRoles = [] }) {
   const { user, loading } = useContext(UserContext);
@@ -80,5 +84,3 @@ export default function PrivateRoute({ allowedRoles = [] }) {
 // }
 
 // export default PrivateRoute;
-
-

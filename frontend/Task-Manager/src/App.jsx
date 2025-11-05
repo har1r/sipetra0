@@ -8,7 +8,8 @@ import {
 
 import LoadingSpinner from "./components/ui/LoadingSpinner";
 import Notification from "./components/ui/Notification";
-import UserProvider, { UserContext } from "./context/UserContexts";
+import UserProvider from "./context/UserProvider";
+import UserContext from "./context/UserContexts";
 
 import { ROLE, DEFAULT_ROUTE_BY_ROLE } from "./utils/data";
 import PrivateRoute from "./routes/PrivateRoute";

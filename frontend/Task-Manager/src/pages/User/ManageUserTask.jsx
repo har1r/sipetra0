@@ -16,7 +16,7 @@ import ApprovalModal from "../../components/modals/ApprovalModal";
 import TableSkeleton from "../../components/Skeletons/TableSkeleton";
 import axiosInstance from "../../utils/axiosInstance";
 import { API_PATHS } from "../../utils/apiPaths";
-import { UserContext } from "../../context/UserContexts";
+import UserContext from "../../context/UserContexts";
 
 const TaskTable = React.lazy(() => import("../../components/tabels/TaskTable"));
 

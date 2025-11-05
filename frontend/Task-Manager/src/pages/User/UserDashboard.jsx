@@ -17,7 +17,7 @@ import CardSkeleton from "../../components/Skeletons/CardSkeleton";
 import TableSkeleton from "../../components/Skeletons/TableSkeleton";
 import Pagination from "../../components/ui/Pagination";
 
-import { UserContext } from "../../context/UserContexts";
+import UserContext from "../../context/UserContexts";
 import { UseUserAuth } from "../../hooks/UseUserAuth";
 import { API_PATHS } from "../../utils/apiPaths";
 import axiosInstance from "../../utils/axiosInstance";

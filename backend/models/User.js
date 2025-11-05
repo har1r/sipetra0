@@ -34,6 +34,10 @@ const userSchema = new mongoose.Schema(
       ],
       required: true,
     },
+    isActive: {
+      type: Boolean,
+      default: true, // Saat user baru dibuat, otomatis aktif
+    },
   },
   {
     timestamps: true, // otomatis buat createdAt & updatedAt
