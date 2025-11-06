@@ -21,7 +21,6 @@ const approvalSchema = new mongoose.Schema(
     approverId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
-      required: true,
     },
     approvedAt: {
       type: Date,

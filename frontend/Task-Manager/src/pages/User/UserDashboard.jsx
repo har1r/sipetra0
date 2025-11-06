@@ -8,7 +8,6 @@ import React, {
   useRef,
 } from "react";
 import { useNavigate } from "react-router-dom";
-import { toast } from "react-toastify";
 import { LuArrowRight } from "react-icons/lu";
 
 import DashboardLayout from "../../components/layouts/DashboardLayout";

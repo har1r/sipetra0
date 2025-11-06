@@ -1,29 +1,28 @@
-import React, { useState, useCallback, useId, useContext } from "react";
+import React, { useState, useCallback, useContext, useId } from "react";
 import { useNavigate } from "react-router-dom";
-import { toast } from "react-toastify";
+import toast from "react-hot-toast";
 
 import DashboardLayout from "../../components/layouts/DashboardLayout";
-import AdditionalPersonInput from "../../components/inputs/AdditionalPersonInput";
-import { UserContext } from "../../context/UserContexts";
-import { API_PATHS } from "../../utils/apiPaths";
+import UserContext from "../../context/UserContexts";
 import axiosInstance from "../../utils/axiosInstance";
-import { SUBDISTRICT_OPTIONS, TITLE_OPTIONS } from "../../utils/data";
+import { API_PATHS } from "../../utils/apiPaths";
+import { TITLE_OPTIONS, SUBDISTRICT_OPTIONS } from "../../utils/data";
 import { toTitle, toUpper } from "../../utils/string";
 
 const CreateTask = () => {
   const { user } = useContext(UserContext);
   const navigate = useNavigate();
 
-  // ID unik (aksesibilitas form)
+  // ID unik untuk aksesibilitas
+  const idTitle = useId();
   const idNopel = useId();
-  const idOldName = useId();
   const idNop = useId();
+  const idOldName = useId();
   const idAddress = useId();
   const idVillage = useId();
   const idSubdistrict = useId();
-  const idTitle = useId();
 
-  // 🔹 State utama
+  // State utama
   const [title, setTitle] = useState("");
   const [mainData, setMainData] = useState({
     nopel: "",
@@ -33,24 +32,16 @@ const CreateTask = () => {
     village: "",
     subdistrict: "",
   });
-
   const [additionalData, setAdditionalData] = useState([
     { newName: "", landWide: "", buildingWide: "", certificate: "" },
   ]);
+  const [globalNote, setGlobalNote] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [isSaving, setIsSaving] = useState(false);
+  // Utilitas
+  const toNumber = (val) => (Number.isFinite(+val) ? +val : 0);
 
-  /* ======================================================
-     🧩 Utility Functions
-  ====================================================== */
-  const toNumber = (value) => {
-    const num = Number(value);
-    return Number.isFinite(num) ? num : 0;
-  };
-
-  /* ======================================================
-     ✏️ Handlers
-  ====================================================== */
+  // Handler
   const handleMainChange = useCallback((e) => {
     const { name, value } = e.target;
     setMainData((prev) => ({ ...prev, [name]: value }));
@@ -65,263 +56,272 @@ const CreateTask = () => {
     });
   }, []);
 
-  const handleAddAdditional = useCallback(() => {
+  const handleAddRow = () => {
     setAdditionalData((prev) => [
       ...prev,
       { newName: "", landWide: "", buildingWide: "", certificate: "" },
     ]);
-  }, []);
+  };
 
-  const handleRemoveAdditional = useCallback((index) => {
+  const handleRemoveRow = (index) => {
     setAdditionalData((prev) => prev.filter((_, i) => i !== index));
-  }, []);
+  };
 
-  /* ======================================================
-     🚀 Submit Handler
-  ====================================================== */
-  const handleSubmit = useCallback(
-    async (e) => {
-      e.preventDefault();
+  // Submit handler
+  const handleSubmit = async (e) => {
+    e.preventDefault();
 
-      // ✅ Validasi dasar sebelum kirim ke backend
-      if (!title) {
-        toast.error("Jenis permohonan wajib dipilih.");
-        return;
+    if (!title) return toast.error("Pilih jenis permohonan terlebih dahulu.");
+
+    const missingMain = Object.entries(mainData).find(([_, v]) => !v);
+    if (missingMain)
+      return toast.error("Semua data utama wajib diisi dengan lengkap.");
+
+    for (const [index, item] of additionalData.entries()) {
+      if (
+        !item.newName ||
+        !item.landWide ||
+        !item.buildingWide ||
+        !item.certificate
+      ) {
+        return toast.error(
+          `Lengkapi semua field pada data tambahan ke-${index + 1}.`
+        );
       }
+    }
 
-      const requiredMainFields = [
-        "nopel",
-        "nop",
-        "oldName",
-        "address",
-        "village",
-        "subdistrict",
-      ];
+    const payload = {
+      title,
+      mainData: {
+        nopel: toUpper(mainData.nopel),
+        nop: mainData.nop,
+        oldName: toTitle(mainData.oldName),
+        address: toTitle(mainData.address),
+        village: toTitle(mainData.village),
+        subdistrict: mainData.subdistrict,
+      },
+      additionalData: additionalData.map((item) => ({
+        newName: toTitle(item.newName),
+        landWide: toNumber(item.landWide),
+        buildingWide: toNumber(item.buildingWide),
+        certificate: toUpper(item.certificate),
+      })),
+      globalNote,
+    };
 
-      for (const field of requiredMainFields) {
-        if (!mainData[field]) {
-          toast.error(
-            "Bagian NOPEL, NOP, nama lama, alamat, desa/kelurahan, dan kecamatan wajib diisi."
-          );
-          return;
-        }
-      }
+    try {
+      setIsSubmitting(true);
+      await axiosInstance.post(API_PATHS.TASK.CREATE_TASK, payload);
+      toast.success("✅ Berkas berhasil dibuat.");
+      navigate(user?.role === "admin" ? "/admin/tasks" : "/user/tasks");
+    } catch (err) {
+      const msg =
+        err?.response?.data?.message ||
+        "Terjadi kesalahan saat membuat berkas.";
+      toast.error(msg);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
-      if (!Array.isArray(additionalData) || additionalData.length === 0) {
-        toast.error("Data tambahan tidak boleh kosong.");
-        return;
-      }
-
-      for (const [index, item] of additionalData.entries()) {
-        if (
-          !item.newName ||
-          !item.landWide ||
-          !item.buildingWide ||
-          !item.certificate
-        ) {
-          toast.error(
-            `Lengkapi semua field pada data tambahan ke-${index + 1}.`
-          );
-          return;
-        }
-      }
-
-      // Siapkan payload sesuai backend
-      const payload = {
-        title,
-        mainData: {
-          nopel: toUpper(mainData.nopel),
-          nop: mainData.nop,
-          oldName: toTitle(mainData.oldName),
-          address: toTitle(mainData.address),
-          village: toTitle(mainData.village),
-          subdistrict: mainData.subdistrict,
-        },
-        additionalData: additionalData.map((item) => ({
-          newName: toTitle(item.newName),
-          landWide: toNumber(item.landWide),
-          buildingWide: toNumber(item.buildingWide),
-          certificate: toUpper(item.certificate),
-        })),
-      };
-
-      try {
-        setIsSaving(true);
-        await axiosInstance.post(API_PATHS.TASK.CREATE_TASK, payload);
-
-        toast.success("Berkas berhasil dibuat.");
-        navigate(user?.role === "admin" ? "/admin/tasks" : "/user/tasks");
-      } catch (error) {
-        const errMsg =
-          error?.response?.data?.message ||
-          "Terjadi kesalahan saat membuat berkas.";
-        toast.error(errMsg);
-      } finally {
-        setIsSaving(false);
-      }
-    },
-    [title, mainData, additionalData, user, navigate]
-  );
-
-  /* ======================================================
-     🧱 Render
-  ====================================================== */
+  // Render
   return (
     <DashboardLayout activeMenu="Create Task">
-      <h2 className="text-xl font-semibold mb-4">Buat Permohonan</h2>
+      <div className="mx-auto w-full max-w-6xl bg-white rounded-2xl shadow-lg p-8 lg:p-10">
+        <h2 className="text-3xl font-semibold text-slate-800 mb-8">
+          📝 Buat Permohonan Baru
+        </h2>
 
-      <form
-        onSubmit={handleSubmit}
-        className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t pt-4"
-      >
-        {/* ---------- Data Utama ---------- */}
-        <div className="md:col-span-2">
-          <h3 className="text-slate-700 font-semibold mb-2">Data Utama</h3>
-        </div>
+        <form onSubmit={handleSubmit} className="space-y-8">
+          {/* ---------- Jenis Permohonan ---------- */}
+          <div>
+            <label
+              htmlFor={idTitle}
+              className="block text-base font-medium text-slate-700 mb-2"
+            >
+              Jenis Permohonan <span className="text-red-500">*</span>
+            </label>
+            <select
+              id={idTitle}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="form-input w-full text-base"
+              required
+            >
+              <option value="">Pilih Jenis Permohonan</option>
+              {TITLE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
 
-        {/* NOPEL */}
-        <FormInput
-          id={idNopel}
-          label="NOPEL"
-          name="nopel"
-          value={mainData.nopel}
-          onChange={handleMainChange}
-          required
-        />
-
-        {/* Nama Lama */}
-        <FormInput
-          id={idOldName}
-          label="Nama Lama"
-          name="oldName"
-          value={mainData.oldName}
-          onChange={handleMainChange}
-          required
-        />
-
-        {/* NOP */}
-        <FormInput
-          id={idNop}
-          label="NOP"
-          name="nop"
-          value={mainData.nop}
-          onChange={handleMainChange}
-          required
-        />
-
-        {/* Alamat */}
-        <FormInput
-          id={idAddress}
-          label="Alamat"
-          name="address"
-          value={mainData.address}
-          onChange={handleMainChange}
-          required
-        />
-
-        {/* Desa */}
-        <FormInput
-          id={idVillage}
-          label="Kelurahan/Desa"
-          name="village"
-          value={mainData.village}
-          onChange={handleMainChange}
-          required
-        />
-
-        {/* Kecamatan */}
-        <div>
-          <label htmlFor={idSubdistrict} className="form-label">
-            Kecamatan <span className="text-red-500">*</span>
-          </label>
-          <select
-            id={idSubdistrict}
-            name="subdistrict"
-            value={mainData.subdistrict}
-            onChange={handleMainChange}
-            className="form-input w-full"
-            required
-          >
-            <option value="">Pilih Kecamatan</option>
-            {SUBDISTRICT_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Jenis Permohonan */}
-        <div className="md:col-span-2">
-          <label htmlFor={idTitle} className="form-label">
-            Jenis Permohonan <span className="text-red-500">*</span>
-          </label>
-          <select
-            id={idTitle}
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="form-input w-full"
-            required
-          >
-            <option value="">Pilih Jenis Permohonan</option>
-            {TITLE_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* ---------- Data Tambahan ---------- */}
-        <div className="md:col-span-2 border-t pt-4 mt-4">
-          <h3 className="text-slate-700 font-semibold mb-2">Data Tambahan</h3>
-          {additionalData.map((item, index) => (
-            <AdditionalPersonInput
-              key={index}
-              item={item}
-              index={index}
-              handleChange={handleAdditionalChange}
-              onRemove={handleRemoveAdditional}
-              showRemove={additionalData.length > 1}
+          {/* ---------- Data Utama ---------- */}
+          <SectionTitle text="Data Utama" />
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <InputField
+              label="NOPEL"
+              name="nopel"
+              value={mainData.nopel}
+              onChange={handleMainChange}
+              required
             />
-          ))}
+            <InputField
+              label="NOP"
+              name="nop"
+              value={mainData.nop}
+              onChange={handleMainChange}
+              required
+            />
+            <InputField
+              label="Nama Lama"
+              name="oldName"
+              value={mainData.oldName}
+              onChange={handleMainChange}
+              required
+            />
+            <InputField
+              label="Alamat"
+              name="address"
+              value={mainData.address}
+              onChange={handleMainChange}
+              required
+            />
+            <InputField
+              label="Kelurahan / Desa"
+              name="village"
+              value={mainData.village}
+              onChange={handleMainChange}
+              required
+            />
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">
+                Kecamatan <span className="text-red-500">*</span>
+              </label>
+              <select
+                name="subdistrict"
+                value={mainData.subdistrict}
+                onChange={handleMainChange}
+                className="form-input w-full"
+                required
+              >
+                <option value="">Pilih Kecamatan</option>
+                {SUBDISTRICT_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
 
-          <button
-            type="button"
-            onClick={handleAddAdditional}
-            className="text-blue-600 text-sm hover:underline"
-          >
-            + Tambah Subjek Pajak Baru
-          </button>
-        </div>
+          {/* ---------- Data Tambahan ---------- */}
+          <SectionTitle text="Data Tambahan" />
+          <div className="space-y-5">
+            {additionalData.map((item, index) => (
+              <div
+                key={index}
+                className="p-5 border rounded-xl bg-slate-50 relative"
+              >
+                <h4 className="font-medium text-slate-700 mb-3">
+                  Subjek Pajak #{index + 1}
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <InputField
+                    label="Nama Baru"
+                    name="newName"
+                    value={item.newName}
+                    onChange={(e) => handleAdditionalChange(e, index)}
+                    required
+                  />
+                  <InputField
+                    label="Luas Tanah (m²)"
+                    name="landWide"
+                    type="number"
+                    value={item.landWide}
+                    onChange={(e) => handleAdditionalChange(e, index)}
+                    required
+                  />
+                  <InputField
+                    label="Luas Bangunan (m²)"
+                    name="buildingWide"
+                    type="number"
+                    value={item.buildingWide}
+                    onChange={(e) => handleAdditionalChange(e, index)}
+                    required
+                  />
+                  <InputField
+                    label="Nomor Sertifikat"
+                    name="certificate"
+                    value={item.certificate}
+                    onChange={(e) => handleAdditionalChange(e, index)}
+                    required
+                  />
+                </div>
 
-        {/* ---------- Tombol Submit ---------- */}
-        <div className="md:col-span-2 mt-4">
-          <button
-            type="submit"
-            disabled={isSaving}
-            className="bg-primary text-white px-4 py-2 rounded hover:bg-primary-dark transition disabled:opacity-60"
-          >
-            {isSaving ? "Menyimpan..." : "Buat Permohonan"}
-          </button>
-        </div>
-      </form>
+                {additionalData.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveRow(index)}
+                    className="absolute top-3 right-4 text-red-500 hover:underline text-sm"
+                  >
+                    Hapus
+                  </button>
+                )}
+              </div>
+            ))}
+
+            <button
+              type="button"
+              onClick={handleAddRow}
+              className="text-sm text-blue-600 hover:underline font-medium"
+            >
+              + Tambah Subjek Pajak
+            </button>
+          </div>
+
+          {/* ---------- Catatan Global ---------- */}
+          <SectionTitle text="Catatan (Opsional)" />
+          <textarea
+            value={globalNote}
+            onChange={(e) => setGlobalNote(e.target.value)}
+            placeholder="Tambahkan catatan umum di sini..."
+            className="form-input w-full min-h-[100px]"
+          />
+
+          {/* ---------- Tombol Submit ---------- */}
+          <div className="text-right pt-4">
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="bg-blue-600 text-white px-8 py-3 rounded-lg shadow-md hover:bg-blue-700 disabled:opacity-60 transition text-base"
+            >
+              {isSubmitting ? "Menyimpan..." : "Buat Permohonan"}
+            </button>
+          </div>
+        </form>
+      </div>
     </DashboardLayout>
   );
 };
 
-/* ======================================================
-   🔧 Komponen Input Reusable
-====================================================== */
-const FormInput = ({ id, label, name, value, onChange, required = false }) => (
+// Input sederhana
+const InputField = ({
+  label,
+  name,
+  value,
+  onChange,
+  required,
+  type = "text",
+}) => (
   <div>
-    <label htmlFor={id} className="form-label">
+    <label className="block text-sm font-medium text-slate-700 mb-1">
       {label} {required && <span className="text-red-500">*</span>}
     </label>
     <input
-      id={id}
+      type={type}
       name={name}
-      type="text"
       value={value}
       onChange={onChange}
       placeholder={label}
@@ -331,15 +331,21 @@ const FormInput = ({ id, label, name, value, onChange, required = false }) => (
   </div>
 );
 
+// Judul section
+const SectionTitle = ({ text }) => (
+  <h3 className="text-lg font-semibold text-slate-800 border-b pb-1 mb-2">
+    {text}
+  </h3>
+);
+
 export default CreateTask;
 
 // import React, { useState, useCallback, useId, useContext } from "react";
 // import { useNavigate } from "react-router-dom";
-// import { toast } from "react-toastify";
 
 // import DashboardLayout from "../../components/layouts/DashboardLayout";
 // import AdditionalPersonInput from "../../components/inputs/AdditionalPersonInput";
-// import { UserContext } from "../../context/UserContexts";
+// import UserContext from "../../context/UserContexts";
 // import { API_PATHS } from "../../utils/apiPaths";
 // import axiosInstance from "../../utils/axiosInstance";
 // import { SUBDISTRICT_OPTIONS, TITLE_OPTIONS } from "../../utils/data";
@@ -349,7 +355,7 @@ export default CreateTask;
 //   const { user } = useContext(UserContext);
 //   const navigate = useNavigate();
 
-//   // ID unik untuk label–input (aksesibilitas)
+//   // ID unik (aksesibilitas form)
 //   const idNopel = useId();
 //   const idOldName = useId();
 //   const idNop = useId();
@@ -358,7 +364,8 @@ export default CreateTask;
 //   const idSubdistrict = useId();
 //   const idTitle = useId();
 
-//   // State utama
+//   // 🔹 State utama
+//   const [title, setTitle] = useState("");
 //   const [mainData, setMainData] = useState({
 //     nopel: "",
 //     nop: "",
@@ -372,21 +379,19 @@ export default CreateTask;
 //     { newName: "", landWide: "", buildingWide: "", certificate: "" },
 //   ]);
 
-//   const [title, setTitle] = useState("");
 //   const [isSaving, setIsSaving] = useState(false);
 
-//   /** ------------------------------
-//    * Utility Functions
-//    * ------------------------------ */
+//   /* ======================================================
+//      🧩 Utility Functions
+//   ====================================================== */
 //   const toNumber = (value) => {
-//     if (!value) return 0;
-//     const numberValue = Number(value);
-//     return Number.isFinite(numberValue) ? numberValue : 0;
+//     const num = Number(value);
+//     return Number.isFinite(num) ? num : 0;
 //   };
 
-//   /** ------------------------------
-//    * Change Handlers
-//    * ------------------------------ */
+//   /* ======================================================
+//      ✏️ Handlers
+//   ====================================================== */
 //   const handleMainChange = useCallback((e) => {
 //     const { name, value } = e.target;
 //     setMainData((prev) => ({ ...prev, [name]: value }));
@@ -401,79 +406,107 @@ export default CreateTask;
 //     });
 //   }, []);
 
-//   const handleAddAdditionalPerson = useCallback(() => {
+//   const handleAddAdditional = useCallback(() => {
 //     setAdditionalData((prev) => [
 //       ...prev,
 //       { newName: "", landWide: "", buildingWide: "", certificate: "" },
 //     ]);
 //   }, []);
 
-//   const handleRemoveAdditionalPerson = useCallback((index) => {
+//   const handleRemoveAdditional = useCallback((index) => {
 //     setAdditionalData((prev) => prev.filter((_, i) => i !== index));
 //   }, []);
 
-//   /** ------------------------------
-//    * Submit Handler
-//    * ------------------------------ */
+//   /* ======================================================
+//      🚀 Submit Handler
+//   ====================================================== */
 //   const handleSubmit = useCallback(
 //     async (e) => {
 //       e.preventDefault();
 
-//       // Validasi dasar
+//       // ✅ Validasi dasar sebelum kirim ke backend
 //       if (!title) {
 //         toast.error("Jenis permohonan wajib dipilih.");
 //         return;
 //       }
 
-//       if (!mainData.nopel || !mainData.oldName || !mainData.nop) {
-//         toast.error("Lengkapi data utama sebelum membuat permohonan.");
+//       const requiredMainFields = [
+//         "nopel",
+//         "nop",
+//         "oldName",
+//         "address",
+//         "village",
+//         "subdistrict",
+//       ];
+
+//       for (const field of requiredMainFields) {
+//         if (!mainData[field]) {
+//           toast.error(
+//             "Bagian NOPEL, NOP, nama lama, alamat, desa/kelurahan, dan kecamatan wajib diisi."
+//           );
+//           return;
+//         }
+//       }
+
+//       if (!Array.isArray(additionalData) || additionalData.length === 0) {
+//         toast.error("Data tambahan tidak boleh kosong.");
 //         return;
 //       }
 
-//       if (!mainData.subdistrict) {
-//         toast.error("Kecamatan wajib dipilih.");
-//         return;
+//       for (const [index, item] of additionalData.entries()) {
+//         if (
+//           !item.newName ||
+//           !item.landWide ||
+//           !item.buildingWide ||
+//           !item.certificate
+//         ) {
+//           toast.error(
+//             `Lengkapi semua field pada data tambahan ke-${index + 1}.`
+//           );
+//           return;
+//         }
 //       }
 
-//       setIsSaving(true);
-
+//       // Siapkan payload sesuai backend
 //       const payload = {
 //         title,
 //         mainData: {
 //           nopel: toUpper(mainData.nopel),
+//           nop: mainData.nop,
 //           oldName: toTitle(mainData.oldName),
 //           address: toTitle(mainData.address),
 //           village: toTitle(mainData.village),
 //           subdistrict: mainData.subdistrict,
-//           nop: mainData.nop,
 //         },
 //         additionalData: additionalData.map((item) => ({
 //           newName: toTitle(item.newName),
 //           landWide: toNumber(item.landWide),
 //           buildingWide: toNumber(item.buildingWide),
-//           certificate: toUpper(item.certificate) || "",
+//           certificate: toUpper(item.certificate),
 //         })),
-//         currentStage: "diinput",
 //       };
 
 //       try {
+//         setIsSaving(true);
 //         await axiosInstance.post(API_PATHS.TASK.CREATE_TASK, payload);
-//         toast.success("Permohonan berhasil dibuat.");
-//         navigate(user?.role !== "admin" ? "/user/tasks" : "/admin/tasks");
+
+//         toast.success("Berkas berhasil dibuat.");
+//         navigate(user?.role === "admin" ? "/admin/tasks" : "/user/tasks");
 //       } catch (error) {
 //         const errMsg =
-//           error?.response?.data?.message || "Gagal membuat permohonan.";
+//           error?.response?.data?.message ||
+//           "Terjadi kesalahan saat membuat berkas.";
 //         toast.error(errMsg);
 //       } finally {
 //         setIsSaving(false);
 //       }
 //     },
-//     [title, mainData, additionalData, navigate, user]
+//     [title, mainData, additionalData, user, navigate]
 //   );
 
-//   /** ------------------------------
-//    * Render
-//    * ------------------------------ */
+//   /* ======================================================
+//      🧱 Render
+//   ====================================================== */
 //   return (
 //     <DashboardLayout activeMenu="Create Task">
 //       <h2 className="text-xl font-semibold mb-4">Buat Permohonan</h2>
@@ -482,115 +515,64 @@ export default CreateTask;
 //         onSubmit={handleSubmit}
 //         className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t pt-4"
 //       >
-//         {/* Data Utama */}
+//         {/* ---------- Data Utama ---------- */}
 //         <div className="md:col-span-2">
 //           <h3 className="text-slate-700 font-semibold mb-2">Data Utama</h3>
 //         </div>
 
 //         {/* NOPEL */}
-//         <div>
-//           <label
-//             htmlFor={idNopel}
-//             className="block text-sm text-slate-600 mb-1"
-//           >
-//             NOPEL <span className="text-red-500">*</span>
-//           </label>
-//           <input
-//             id={idNopel}
-//             name="nopel"
-//             type="text"
-//             value={toUpper(mainData.nopel)}
-//             onChange={handleMainChange}
-//             placeholder="NOPEL"
-//             className="form-input w-full uppercase"
-//             required
-//           />
-//         </div>
+//         <FormInput
+//           id={idNopel}
+//           label="NOPEL"
+//           name="nopel"
+//           value={mainData.nopel}
+//           onChange={handleMainChange}
+//           required
+//         />
 
 //         {/* Nama Lama */}
-//         <div>
-//           <label
-//             htmlFor={idOldName}
-//             className="block text-sm text-slate-600 mb-1"
-//           >
-//             Nama Lama <span className="text-red-500">*</span>
-//           </label>
-//           <input
-//             id={idOldName}
-//             name="oldName"
-//             type="text"
-//             value={toTitle(mainData.oldName)}
-//             onChange={handleMainChange}
-//             placeholder="Nama Lama"
-//             className="form-input w-full capitalize"
-//             required
-//           />
-//         </div>
+//         <FormInput
+//           id={idOldName}
+//           label="Nama Lama"
+//           name="oldName"
+//           value={mainData.oldName}
+//           onChange={handleMainChange}
+//           required
+//         />
 
 //         {/* NOP */}
-//         <div>
-//           <label htmlFor={idNop} className="block text-sm text-slate-600 mb-1">
-//             NOP <span className="text-red-500">*</span>
-//           </label>
-//           <input
-//             id={idNop}
-//             name="nop"
-//             type="text"
-//             inputMode="numeric"
-//             value={mainData.nop}
-//             onChange={handleMainChange}
-//             placeholder="NOP"
-//             className="form-input w-full"
-//             required
-//           />
-//         </div>
+//         <FormInput
+//           id={idNop}
+//           label="NOP"
+//           name="nop"
+//           value={mainData.nop}
+//           onChange={handleMainChange}
+//           required
+//         />
 
 //         {/* Alamat */}
-//         <div>
-//           <label
-//             htmlFor={idAddress}
-//             className="block text-sm text-slate-600 mb-1"
-//           >
-//             Alamat <span className="text-red-500">*</span>
-//           </label>
-//           <input
-//             id={idAddress}
-//             name="address"
-//             type="text"
-//             value={toTitle(mainData.address)}
-//             onChange={handleMainChange}
-//             placeholder="Alamat"
-//             className="form-input w-full capitalize"
-//             required
-//           />
-//         </div>
+//         <FormInput
+//           id={idAddress}
+//           label="Alamat"
+//           name="address"
+//           value={mainData.address}
+//           onChange={handleMainChange}
+//           required
+//         />
 
-//         {/* Kelurahan/Desa */}
-//         <div>
-//           <label
-//             htmlFor={idVillage}
-//             className="block text-sm text-slate-600 mb-1"
-//           >
-//             Kelurahan/Desa <span className="text-red-500">*</span>
-//           </label>
-//           <input
-//             id={idVillage}
-//             name="village"
-//             type="text"
-//             value={toTitle(mainData.village)}
-//             onChange={handleMainChange}
-//             placeholder="Kelurahan/Desa"
-//             className="form-input w-full capitalize"
-//             required
-//           />
-//         </div>
+//         {/* Desa */}
+//         <FormInput
+//           id={idVillage}
+//           label="Kelurahan/Desa"
+//           name="village"
+//           value={mainData.village}
+//           onChange={handleMainChange}
+//           required
+//         />
 
 //         {/* Kecamatan */}
 //         <div>
-//           <label
-//             htmlFor={idSubdistrict}
-//             className="block text-sm text-slate-600 mb-1"
-//           >
+//           <label htmlFor={idSubdistrict} className="form-label">
 //             Kecamatan <span className="text-red-500">*</span>
 //           </label>
 //           <select
@@ -602,9 +584,9 @@ export default CreateTask;
 //             required
 //           >
 //             <option value="">Pilih Kecamatan</option>
-//             {SUBDISTRICT_OPTIONS.map((option) => (
-//               <option key={option.value} value={option.value}>
-//                 {option.label}
+//             {SUBDISTRICT_OPTIONS.map((opt) => (
+//               <option key={opt.value} value={opt.value}>
+//                 {opt.label}
 //               </option>
 //             ))}
 //           </select>
@@ -612,10 +594,7 @@ export default CreateTask;
 
 //         {/* Jenis Permohonan */}
 //         <div className="md:col-span-2">
-//           <label
-//             htmlFor={idTitle}
-//             className="block text-sm text-slate-600 mb-1"
-//           >
+//           <label htmlFor={idTitle} className="form-label">
 //             Jenis Permohonan <span className="text-red-500">*</span>
 //           </label>
 //           <select
@@ -626,15 +605,15 @@ export default CreateTask;
 //             required
 //           >
 //             <option value="">Pilih Jenis Permohonan</option>
-//             {TITLE_OPTIONS.map((option) => (
-//               <option key={option.value} value={option.value}>
-//                 {option.label}
+//             {TITLE_OPTIONS.map((opt) => (
+//               <option key={opt.value} value={opt.value}>
+//                 {opt.label}
 //               </option>
 //             ))}
 //           </select>
 //         </div>
 
-//         {/* Data Tambahan */}
+//         {/* ---------- Data Tambahan ---------- */}
 //         <div className="md:col-span-2 border-t pt-4 mt-4">
 //           <h3 className="text-slate-700 font-semibold mb-2">Data Tambahan</h3>
 //           {additionalData.map((item, index) => (
@@ -643,21 +622,21 @@ export default CreateTask;
 //               item={item}
 //               index={index}
 //               handleChange={handleAdditionalChange}
-//               onRemove={handleRemoveAdditionalPerson}
+//               onRemove={handleRemoveAdditional}
 //               showRemove={additionalData.length > 1}
 //             />
 //           ))}
 
 //           <button
 //             type="button"
-//             onClick={handleAddAdditionalPerson}
+//             onClick={handleAddAdditional}
 //             className="text-blue-600 text-sm hover:underline"
 //           >
 //             + Tambah Subjek Pajak Baru
 //           </button>
 //         </div>
 
-//         {/* Tombol Submit */}
+//         {/* ---------- Tombol Submit ---------- */}
 //         <div className="md:col-span-2 mt-4">
 //           <button
 //             type="submit"
@@ -671,5 +650,26 @@ export default CreateTask;
 //     </DashboardLayout>
 //   );
 // };
+
+// /* ======================================================
+//    🔧 Komponen Input Reusable
+// ====================================================== */
+// const FormInput = ({ id, label, name, value, onChange, required = false }) => (
+//   <div>
+//     <label htmlFor={id} className="form-label">
+//       {label} {required && <span className="text-red-500">*</span>}
+//     </label>
+//     <input
+//       id={id}
+//       name={name}
+//       type="text"
+//       value={value}
+//       onChange={onChange}
+//       placeholder={label}
+//       className="form-input w-full"
+//       required={required}
+//     />
+//   </div>
+// );
 
 // export default CreateTask;

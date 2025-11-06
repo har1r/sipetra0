@@ -7,7 +7,7 @@ import {
 } from "react-router-dom";
 
 import LoadingSpinner from "./components/ui/LoadingSpinner";
-import Notification from "./components/ui/Notification";
+import { Toaster } from "react-hot-toast";
 import UserProvider from "./context/UserProvider";
 import UserContext from "./context/UserContexts";
 
@@ -94,7 +94,7 @@ const App = () => {
   return (
     <UserProvider>
       <Router>
-        <Notification />
+        <Toaster position="top-right" />
 
         {/* Suspense global: loading spinner tunggal untuk semua halaman lazy */}
         <Suspense

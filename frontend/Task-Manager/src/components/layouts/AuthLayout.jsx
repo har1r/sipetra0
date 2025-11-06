@@ -22,7 +22,7 @@ const AuthLayout = ({ children }) => {
 
           {/* 🌌 Konten teks */}
           <div className="relative z-10 text-center">
-            <h1 className="text-3xl font-extrabold mb-2 tracking-wide">
+            <h1 className="text-2xl md:text-3xl font-extrabold mb-2 tracking-wide">
               Selamat Datang Ke <span className="text-blue-300">SIPETRA</span>
             </h1>
             <p className="text-sm text-slate-200/80 max-w-sm mx-auto">

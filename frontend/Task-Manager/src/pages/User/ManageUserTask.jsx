@@ -7,7 +7,6 @@ import React, {
   useState,
   useContext,
 } from "react";
-import { toast } from "react-toastify";
 
 import DashboardLayout from "../../components/layouts/DashboardLayout";
 import TaskFilter from "../../components/filters/TaskFilter";

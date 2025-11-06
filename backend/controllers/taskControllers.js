@@ -12,7 +12,7 @@ const stageToRoleMap = {
   selesai: "pengecek",
 };
 
-// Urutan stage workflow
+// Urutan stage
 const stageOrder = [
   "diinput",
   "ditata",
@@ -29,12 +29,14 @@ const stageMap = {
   peneliti: "diteliti",
   pengarsip: "diarsipkan",
   pengirim: "dikirim",
+  pengecek: "selesai",
 };
 
 /**
  * 🧾 Controller: Membuat task baru
  * - Hanya admin atau penginput yang boleh membuat task
- * - Validasi data sesuai struktur taskSchema
+ * - Ketika berkas dibuat maka otomatis stage "diinput" diset approved oleh pembuat
+ * - Jika jenis "pengaktifan" maka semua stage sebelum "selesai" langsung diset approved
  */
 const createTask = async (req, res) => {
   try {
@@ -44,7 +46,7 @@ const createTask = async (req, res) => {
     /* ======================================================
        1️⃣ Validasi Hak Akses
     ====================================================== */
-    if (user.role !== "admin" && user.role !== "penginput") {
+    if (!["admin", "penginput"].includes(user.role)) {
       return res.status(403).json({
         message: "Anda tidak memiliki izin untuk membuat berkas ini.",
       });
@@ -72,7 +74,7 @@ const createTask = async (req, res) => {
     for (const field of requiredMainFields) {
       if (!mainData[field]) {
         return res.status(400).json({
-          message: `Bagian nopel, nop, nama lama, alamat, desa/kelurahan, kecamatan pada data utama wajib diisi.`,
+          message: `Field '${field}' pada data utama wajib diisi.`,
         });
       }
     }
@@ -83,178 +85,104 @@ const createTask = async (req, res) => {
     if (!Array.isArray(additionalData) || additionalData.length === 0) {
       return res.status(400).json({
         message:
-          "Bagian data tamabahan harus berupa array dan tidak boleh kosong.",
+          "Bagian data tambahan harus berupa array dan tidak boleh kosong.",
       });
     }
 
     for (const [index, item] of additionalData.entries()) {
-      if (
-        !item.newName ||
-        typeof item.landWide !== "number" ||
-        typeof item.buildingWide !== "number" ||
-        !item.certificate
-      ) {
+      const missingField = !item.newName
+        ? "newName"
+        : typeof item.landWide !== "number"
+        ? "landWide"
+        : typeof item.buildingWide !== "number"
+        ? "buildingWide"
+        : !item.certificate
+        ? "certificate"
+        : null;
+
+      if (missingField) {
         return res.status(400).json({
-          message: `bagian nama baru, luas tanah, luas bangunan, sertifikat pada data tambahan wajib diisi untuk pecahan ke ${index}.`,
+          message: `Field '${missingField}' pada data tambahan ke-${
+            index + 1
+          } wajib diisi.`,
         });
       }
     }
 
     /* ======================================================
-       4️⃣ Siapkan struktur approvals default
-       sesuai stageToRoleMap (misal: diinput → penginput, ditata → penata, dst.)
+       4️⃣ Siapkan Struktur Approvals Default
     ====================================================== */
-    const approvals = Object.entries(stageToRoleMap).map(
-      ([stage, approverRole], index) => ({
-        stageOrder: index + 1, // urutan tahap approval
-        stage,
-        approverRole,
-        approverId: null, // belum ada yang approve
-        approvedAt: null,
-        rejectedAt: null,
-        note: "",
-        status: "in_progress",
-      })
-    );
+    const approvals = stageOrder.map((stage, index) => ({
+      stageOrder: index + 1,
+      stage,
+      approverRole: stageToRoleMap[stage],
+      approverId: null,
+      approvedAt: null,
+      rejectedAt: null,
+      note: "",
+      status: "in_progress",
+    }));
 
     /* ======================================================
-       5️⃣ Buat dan simpan task baru
+       5️⃣ Logika Otomatis Approval Berdasarkan Jenis Title
     ====================================================== */
-    const task = new Task({
+    let currentStage = "diinput"; // default awal
+    const now = new Date();
+
+    if (title.toLowerCase() === "pengaktifan") {
+      // Semua tahap sebelum "selesai" langsung diset approved
+      approvals.forEach((approval) => {
+        if (approval.stage !== "selesai") {
+          approval.status = "approved";
+          approval.approverId = user._id;
+          approval.approvedAt = now;
+          approval.note = "Approved otomatis (jenis pengaktifan)";
+        }
+      });
+      currentStage = "selesai";
+    } else {
+      // Hanya tahap "diinput" yang otomatis diset approved
+      const inputStage = approvals.find((a) => a.stage === "diinput");
+      if (inputStage) {
+        inputStage.status = "approved";
+        inputStage.approverId = user._id;
+        inputStage.approvedAt = now;
+        inputStage.note = "Approved otomatis saat diinput";
+      }
+      currentStage = "ditata"; // lanjut ke tahap berikutnya
+    }
+
+    /* ======================================================
+       6️⃣ Buat dan Simpan Task Baru
+    ====================================================== */
+    const newTask = new Task({
       title,
       mainData,
       additionalData,
-      currentStage,
-      overallStatus: "in_progress",
       globalNote: globalNote || "",
       createdBy: user._id,
+      currentStage,
+      overallStatus: "in_progress",
       approvals,
     });
 
-    await task.save();
+    await newTask.save();
 
     /* ======================================================
-       6️⃣ Kirim respons sukses
+       7️⃣ Kirim Respons Sukses
     ====================================================== */
     return res.status(201).json({
       message: "Berkas berhasil dibuat.",
-      task,
+      task: newTask,
     });
   } catch (error) {
-    console.error("Error membuat berkas:", error);
+    console.error("Error saat membuat berkas:", error);
     return res.status(500).json({
       message: "Terjadi kesalahan saat membuat berkas.",
-      error: error.message,
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
-
-// @Deskripsi Membuat tugas baru
-// @Route     POST /api/tasks/
-// @Access    Private (hanya admin dan approver input yang bisa membuat task)
-// const createTask = async (req, res) => {
-//   try {
-//     const user = req.user;
-//     const { title, mainData, additionalData, currentStage } = req.body;
-
-//     // Validasi role
-//     if (
-//       user.role !== "admin" &&
-//       !(user.role === "penginput" && currentStage === "diinput")
-//     ) {
-//       return res
-//         .status(403) //forbidden
-//         .json({
-//           message: "Anda tidak memiliki izin untuk membuat berkas ini.",
-//         });
-//     }
-
-//     // Validasi input
-//     if (!title || !mainData || !additionalData) {
-//       return res.status(400).json({
-//         message: "Field title, mainData, dan additionalData wajib diisi.", //request yang tidak valid.
-//       });
-//     }
-
-//     const requiredMainFields = [
-//       "nopel",
-//       "nop",
-//       "oldName",
-//       "address",
-//       "village",
-//       "subdistrict",
-//     ];
-
-//     // Cek apakah setiap fieldnya diisi atau tidak
-//     for (const field of requiredMainFields) {
-//       if (!mainData[field]) {
-//         return res
-//           .status(400)
-//           .json({ message: `Field mainData.${field} wajib diisi.` });
-//       }
-//     }
-
-//     if (!Array.isArray(additionalData) || additionalData.length === 0) {
-//       return res.status(400).json({
-//         message:
-//           "Field additionalData harus berupa array dan tidak boleh kosong.",
-//       });
-//     }
-
-//     // Validasi setiap additionalData
-//     for (const [index, item] of additionalData.entries()) {
-//       //mengembalikan iterator berisi pasangan [index, value]
-//       if (
-//         !item.newName ||
-//         typeof item.landWide !== "number" ||
-//         typeof item.buildingWide !== "number" ||
-//         !item.certificate
-//       ) {
-//         return res.status(400).json({
-//           message: `Field newName, landWide, buildingWide, certificate wajib diisi pada additionalData index ${index}.`,
-//         });
-//       }
-//     }
-
-//     // Hasilkan approvals sesuai schema (stageToRoleMap sudah harus ada)
-//     const approvals = Object.entries(stageToRoleMap).map(
-//       //mengembalikan iterator berisi pasangan [stage, approverRole] (menghasilkan array of object)
-//       ([stage, approverRole]) => ({
-//         stage,
-//         approverRole,
-//         approverId: null,
-//         approvedAt: null,
-//         note: "",
-//         status: "pending",
-//       })
-//     );
-
-//     // Buat task
-//     const task = new Task({
-//       title,
-//       mainData,
-//       additionalData,
-//       currentStage: currentStage || "diinput",
-//       createdBy: user._id,
-//       approvals,
-//     });
-
-//     await task.save();
-
-//     return res.status(201).json({
-//       //dibuat
-//       message: "Berkas berhasil dibuat.",
-//       task,
-//     });
-//   } catch (error) {
-//     console.error("Error membuat berkas:", error);
-//     return res.status(500).json({
-//       //server error
-//       message: "Terjadi kesalahan saat membuat berkas.",
-//       error: error.message,
-//     });
-//   }
-// };
 
 // @Deskripsi Mengupdate approval
 // @Route     PATCH /api/tasks/:id/approve

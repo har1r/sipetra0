@@ -1,88 +1,62 @@
-import React, { useId, useState } from "react";
+import { useState } from "react";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
 
 /**
- * 🔹 Input universal dengan gaya yang konsisten (Login-style)
- * - Support label, hint, dan error
- * - Bisa menampilkan toggle password
+ * 🔹 Komponen Input universal dengan gaya konsisten
+ * - Support icon di kiri
+ * - Support show/hide password
+ * - Responsif dan clean
  */
 const Input = ({
   id,
-  name,
-  label,
   type = "text",
   placeholder,
-  autoComplete,
   value,
   onChange,
-  required,
-  hint,
-  error,
-  showPasswordToggle = false,
+  required = false,
+  icon,
 }) => {
-  const reactId = useId();
-  const inputId = id || `${name || "field"}-${reactId}`;
   const [showPassword, setShowPassword] = useState(false);
-
   const isPassword = type === "password";
-  const currentType = showPassword && isPassword ? "text" : type;
+  const currentType = showPassword ? "text" : type;
+
+  // Tentukan padding kiri dan kanan agar teks tidak tabrakan
+  const paddingLeft = icon ? "pl-10" : "pl-3";
+  const paddingRight = isPassword ? "pr-10" : "pr-3";
 
   return (
     <div className="w-full">
-      {/* === Label === */}
-      {label && (
-        <label
-          htmlFor={inputId}
-          className="mb-1 block text-sm font-medium text-slate-700"
-        >
-          {label} {required && <span className="text-red-500">*</span>}
-        </label>
-      )}
+      <div className="relative flex items-center">
+        {/* 🔸 Icon kiri */}
+        {icon && (
+          <span className="absolute left-3 text-slate-400 flex items-center justify-center">
+            {icon}
+          </span>
+        )}
 
-      {/* === Input wrapper === */}
-      <div className="relative">
+        {/* 🔸 Input utama */}
         <input
-          id={inputId}
-          name={name}
+          id={id}
           type={currentType}
           placeholder={placeholder}
-          autoComplete={autoComplete}
           value={value}
           onChange={onChange}
           required={required}
-          className={`w-full rounded-lg border ${
-            error
-              ? "border-red-400 focus:ring-red-500"
-              : "border-slate-300 focus:ring-indigo-500"
-          } px-3 py-2 pr-${
-            showPasswordToggle ? "10" : "3"
-          } text-sm placeholder-slate-400 focus:outline-none focus:ring-2`}
+          className={`w-full rounded-lg border border-slate-300 ${paddingLeft} ${paddingRight} py-2 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition`}
         />
 
-        {/* === Tombol Show/Hide Password === */}
-        {showPasswordToggle && isPassword && (
+        {/* 🔸 Tombol show/hide password */}
+        {isPassword && (
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3 top-2.5 text-slate-500 hover:text-indigo-600 focus:outline-none"
+            className="absolute right-3 text-slate-500 hover:text-indigo-600 focus:outline-none"
             title={showPassword ? "Sembunyikan password" : "Tampilkan password"}
           >
             {showPassword ? <FaEyeSlash /> : <FaEye />}
           </button>
         )}
       </div>
-
-      {/* === Hint atau Error === */}
-      {(hint || error) && (
-        <p
-          id={`${inputId}-desc`}
-          className={`mt-1 text-xs ${
-            error ? "text-red-600" : "text-slate-500"
-          }`}
-        >
-          {error || hint}
-        </p>
-      )}
     </div>
   );
 };
