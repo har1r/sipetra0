@@ -2,10 +2,10 @@ import { useState } from "react";
 import { FaEye, FaEyeSlash } from "react-icons/fa";
 
 /**
- * 🔹 Komponen Input universal dengan gaya konsisten
- * - Support icon di kiri
- * - Support show/hide password
- * - Responsif dan clean
+ * 🌿 Input Field — Fresh Harmony Style
+ * - Warna fokus hijau lembut
+ * - Border dan shadow halus
+ * - Dukungan icon kiri & tombol show/hide password
  */
 const Input = ({
   id,
@@ -20,21 +20,20 @@ const Input = ({
   const isPassword = type === "password";
   const currentType = showPassword ? "text" : type;
 
-  // Tentukan padding kiri dan kanan agar teks tidak tabrakan
   const paddingLeft = icon ? "pl-10" : "pl-3";
   const paddingRight = isPassword ? "pr-10" : "pr-3";
 
   return (
     <div className="w-full">
       <div className="relative flex items-center">
-        {/* 🔸 Icon kiri */}
+        {/* 🍃 Icon kiri */}
         {icon && (
-          <span className="absolute left-3 text-slate-400 flex items-center justify-center">
+          <span className="absolute left-3 text-emerald-400 flex items-center justify-center">
             {icon}
           </span>
         )}
 
-        {/* 🔸 Input utama */}
+        {/* 🌿 Input utama */}
         <input
           id={id}
           type={currentType}
@@ -42,15 +41,15 @@ const Input = ({
           value={value}
           onChange={onChange}
           required={required}
-          className={`w-full rounded-lg border border-slate-300 ${paddingLeft} ${paddingRight} py-2 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition`}
+          className={`w-full rounded-xl border border-emerald-200 bg-white/70 ${paddingLeft} ${paddingRight} py-2 text-[15px] placeholder-emerald-300 text-slate-700 shadow-sm focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:border-emerald-300 transition-all duration-200`}
         />
 
-        {/* 🔸 Tombol show/hide password */}
+        {/* 🌼 Tombol show/hide password */}
         {isPassword && (
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3 text-slate-500 hover:text-indigo-600 focus:outline-none"
+            className="absolute right-3 text-emerald-400 hover:text-emerald-600 transition-colors"
             title={showPassword ? "Sembunyikan password" : "Tampilkan password"}
           >
             {showPassword ? <FaEyeSlash /> : <FaEye />}

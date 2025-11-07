@@ -104,14 +104,14 @@ const Login = () => {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full bg-indigo-600 text-white font-semibold py-2.5 rounded-lg shadow-md hover:bg-indigo-700 transition disabled:opacity-60"
+            className="w-full bg-gradient-to-r from-emerald-400 via-green-500 to-lime-500 text-white font-semibold py-2.5 rounded-lg shadow-md hover:brightness-110 hover:shadow-lg hover:scale-[1.02] transition disabled:opacity-60"
           >
             {isSubmitting ? "Proses..." : "Masuk"}
           </button>
 
           <Link
             to="/signup"
-            className="block w-full text-center border border-indigo-600 text-indigo-600 font-semibold py-2.5 rounded-lg hover:bg-indigo-50 transition"
+            className="block w-full text-center border border-emerald-500 text-emerald-600 font-semibold py-2.5 rounded-lg hover:bg-emerald-50 transition"
           >
             Buat Akun Baru
           </Link>

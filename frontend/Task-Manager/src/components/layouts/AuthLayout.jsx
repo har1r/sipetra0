@@ -1,44 +1,71 @@
 import React from "react";
+import { FaLeaf, FaRegSun } from "react-icons/fa6";
 
 const AuthLayout = ({ children }) => {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-100 to-white p-6">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-50 via-green-50 to-lime-100 p-6 relative overflow-hidden">
+      {/* 🍃 Daun jatuh */}
+      <div className="absolute inset-0 pointer-events-none">
+        {[...Array(7)].map((_, i) => (
+          <FaLeaf
+            key={i}
+            className={`absolute text-emerald-400/30 animate-fall opacity-80`}
+            style={{
+              left: `${Math.random() * 100}%`,
+              animationDelay: `${Math.random() * 5}s`,
+              animationDuration: `${6 + Math.random() * 5}s`,
+              transform: `rotate(${Math.random() * 360}deg)`,
+            }}
+          />
+        ))}
+      </div>
+
       <div
         className="
           flex flex-col md:flex-row
           w-full max-w-6xl
           min-h-[650px] md:min-h-[700px]
           rounded-3xl overflow-hidden
-          shadow-2xl bg-white
+          shadow-2xl bg-white/60 backdrop-blur-md
+          relative z-10
         "
       >
-        {/* === Panel kiri: langit malam berbintang === */}
-        <div className="relative md:w-1/2 w-full bg-gradient-to-b from-[#0f172a] via-[#1e3a8a] to-[#312e81] text-white flex flex-col justify-center items-center p-10">
-          {/* ✨ Lapisan bintang halus */}
-          <div className="absolute inset-0 overflow-hidden">
-            <div className="absolute w-full h-full bg-[radial-gradient(white_1px,transparent_1px)] [background-size:3px_3px] opacity-20 animate-twinkle"></div>
-            <div className="absolute w-full h-full bg-[radial-gradient(white_1px,transparent_1px)] [background-size:150px_150px] opacity-10 blur-sm animate-twinkle-slow"></div>
+        {/* === Panel kiri: tema Fresh Harmony === */}
+        <div className="relative md:w-1/2 w-full bg-gradient-to-b from-lime-200 via-green-400 to-emerald-600 text-white flex flex-col justify-center items-center p-10 overflow-hidden">
+          {/* 🌿 Overlay lembut agar teks lebih terlihat */}
+          <div className="absolute inset-0 bg-gradient-to-b from-emerald-900/10 via-emerald-800/20 to-transparent"></div>
+
+          {/* ☀️ Ornamen kecil */}
+          <div className="absolute top-6 left-6 text-emerald-100/40">
+            <FaLeaf className="w-8 h-8" />
+          </div>
+          <div className="absolute bottom-6 right-6 text-lime-100/40">
+            <FaRegSun className="w-6 h-6" />
           </div>
 
-          {/* 🌌 Konten teks */}
+          {/* 🌱 Konten teks */}
           <div className="relative z-10 text-center">
-            <h1 className="text-2xl md:text-3xl font-extrabold mb-2 tracking-wide">
-              Selamat Datang Ke <span className="text-blue-300">SIPETRA</span>
+            <h1 className="text-3xl md:text-4xl font-extrabold mb-3 tracking-wide drop-shadow-lg text-lime-50">
+              Selamat Datang di{" "}
+              <span className="bg-clip-text text-transparent bg-gradient-to-r from-lime-100 via-white to-emerald-200">
+                SIPETRA
+              </span>
             </h1>
-            <p className="text-sm text-slate-200/80 max-w-sm mx-auto">
-              Sistem Informasi Pelayanan - Efektif, Terpantau, dan Rapi.
+            <p className="text-sm md:text-base text-emerald-50/95 max-w-sm mx-auto leading-relaxed">
+              Sistem Informasi Pelayanan — Efektif, Terpantau, dan Rapi.
             </p>
           </div>
         </div>
 
-        {/* === Panel kanan: form === */}
+        {/* === Panel kanan: area form === */}
         <div
           className="
             w-full md:w-1/2
-            bg-white flex flex-col justify-center
+            bg-white/90 flex flex-col justify-center
             px-8 md:px-12 py-12
             overflow-y-auto
-            scrollbar-thin scrollbar-thumb-slate-300 scrollbar-track-transparent
+            scrollbar-thin scrollbar-thumb-emerald-300 scrollbar-track-transparent
+            transition duration-300
           "
         >
           <div className="w-full max-w-md mx-auto">{children}</div>

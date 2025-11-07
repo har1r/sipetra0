@@ -74,7 +74,7 @@ const createTask = async (req, res) => {
     for (const field of requiredMainFields) {
       if (!mainData[field]) {
         return res.status(400).json({
-          message: `Field '${field}' pada data utama wajib diisi.`,
+          message: `Bagian nopel, nop, nama lama, alamat, desa/keluarahan, dan kecamatan pada data utama wajib diisi.`,
         });
       }
     }
@@ -102,13 +102,24 @@ const createTask = async (req, res) => {
 
       if (missingField) {
         return res.status(400).json({
-          message: `Field '${missingField}' pada data tambahan ke-${
+          message: `Bagian nama baru, luas tanah, luas bangunan, dan sertifikat pada data tambahan pecahahan ke-${
             index + 1
           } wajib diisi.`,
         });
       }
     }
 
+    /* ======================================================
+       3️⃣ Validasi additionalData
+    ====================================================== */
+    const existingNopel = await Task.findOne({
+      "mainData.nopel": mainData.nopel,
+    }).lean();
+    if (existingNopel) {
+      return res.status(400).json({
+        message: `Nopel dengan nomor ${mainData.nopel} sudah terdaftar pada berkas lain.`,
+      });
+    }
     /* ======================================================
        4️⃣ Siapkan Struktur Approvals Default
     ====================================================== */
@@ -176,7 +187,7 @@ const createTask = async (req, res) => {
       task: newTask,
     });
   } catch (error) {
-    console.error("Error saat membuat berkas:", error);
+    console.error("Error saat membuat berkas:", error.message);
     return res.status(500).json({
       message: "Terjadi kesalahan saat membuat berkas.",
       error: process.env.NODE_ENV === "development" ? error.message : undefined,
@@ -1012,86 +1023,126 @@ const getAllTasks = async (req, res) => {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    // --- Role-based filter
-    const userRole = String(user.role || "").toLowerCase();
-    const isAdmin = userRole === "admin";
+    // ==========================
+    // 🧠 Variabel Dasar
+    // ==========================
+    const role = String(user.role || "").toLowerCase();
+    const isAdmin = role === "admin";
+
+    // ==========================
+    // 🔍 Ambil Query Params
+    // ==========================
+    const {
+      title,
+      newName,
+      nopel,
+      currentStage,
+      overallStatus, // status hasil: Diproses, Ditolak, Selesai
+      startDate,
+      endDate,
+      sortBy,
+      order,
+      page,
+      limit,
+    } = req.query;
+
+    // ==========================
+    // 🧩 Bangun Query Dinamis
+    // ==========================
     const query = {};
 
-    if (!isAdmin) {
-      const stage = stageMap[userRole];
-      if (!stage) {
-        return res.status(403).json({ message: "Role tidak dikenali." });
-      }
-      query.currentStage = stage;
-    }
-
-    // --- Extract filter params
-    const { nopel, title, startDate, endDate } = req.query;
-
-    if (nopel) {
-      query["mainData.nopel"] = { $regex: String(nopel), $options: "i" };
-    }
-
+    // --- Search by Title
     if (title) {
       const normalizedTitle = String(title).replace(/[_\s]+/g, ".*");
       query.title = { $regex: normalizedTitle, $options: "i" };
     }
 
+    // --- Search by New Name
+    if (newName) {
+      query["mainData.newName"] = {
+        $regex: String(newName).trim(),
+        $options: "i",
+      };
+    }
+
+    // --- Search by Nopel
+    if (nopel) {
+      query["mainData.nopel"] = {
+        $regex: String(nopel).trim(),
+        $options: "i",
+      };
+    }
+
+    // --- Filter Current Stage
+    if (currentStage) {
+      query.currentStage = {
+        $regex: String(currentStage).trim(),
+        $options: "i",
+      };
+    }
+
+    // --- Filter by Date Range
     if (startDate || endDate) {
       query.createdAt = {};
       if (startDate) query.createdAt.$gte = new Date(startDate);
 
       if (endDate) {
-        const endDateObj = new Date(endDate);
-        endDateObj.setHours(23, 59, 59, 999);
-        query.createdAt.$lte = endDateObj;
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        query.createdAt.$lte = end;
       }
     }
 
-    // --- Pagination setup
-    const MAX_LIMIT = 100;
-    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
-    const limit = Math.min(
+    // ==========================
+    // 📄 Pagination & Sorting
+    // ==========================
+    const MAX_LIMIT = 10;
+    const pageNum = Math.max(1, parseInt(page, 10) || 1);
+    const limitNum = Math.min(
       MAX_LIMIT,
-      Math.max(1, parseInt(req.query.limit, 10) || 10)
+      Math.max(1, parseInt(limit, 10) || 10)
     );
-    const skip = (page - 1) * limit;
+    const skip = (pageNum - 1) * limitNum;
 
-    // --- Sorting setup
-    const ALLOWED_SORT_FIELDS = ["createdAt"];
-    const sortField = ALLOWED_SORT_FIELDS.includes(req.query.sortBy)
-      ? req.query.sortBy
+    const ALLOWED_SORT_FIELDS = ["createdAt", "title", "currentStage"];
+    const sortField = ALLOWED_SORT_FIELDS.includes(sortBy)
+      ? sortBy
       : "createdAt";
-    const sortOrder =
-      String(req.query.order || "desc").toLowerCase() === "asc" ? 1 : -1;
+    const sortOrder = String(order || "desc").toLowerCase() === "asc" ? 1 : -1;
 
-    const sort = { [sortField]: sortOrder };
+    const sortConfig = { [sortField]: sortOrder };
 
-    // --- Query database
+    // ==========================
+    // 🗂️ Ambil Data dari DB
+    // ==========================
     const [tasks, totalCount] = await Promise.all([
       Task.find(query)
-        .sort(sort)
+        .sort(sortConfig)
         .skip(skip)
-        .limit(limit)
+        .limit(limitNum)
         .select({
           _id: 1,
           title: 1,
           createdAt: 1,
           currentStage: 1,
           approvals: 1,
+          isCompleted: 1,
           "mainData.nop": 1,
           "mainData.nopel": 1,
-          additionalData: { $slice: ["$additionalData", 1] },
+          "mainData.newName": 1,
+          "mainData.oldName": 1,
+          "mainData.address": 1,
+          additionalData: 1,
         })
         .lean(),
       Task.countDocuments(query),
     ]);
 
-    // --- Enhance with readable status
+    // ==========================
+    // 🧾 Format Data & Filter Overall Status
+    // ==========================
     const formattedTasks = tasks.map((task) => {
-      const hasRejection = task.approvals?.some(
-        (approval) => approval.status === "rejected"
-      );
+      const hasRejection = task.approvals?.some((a) => a.status === "rejected");
       const isFinished =
         task.currentStage === "selesai" || task.isCompleted === true;
 
@@ -1099,22 +1150,45 @@ const getAllTasks = async (req, res) => {
       if (hasRejection) status = "Ditolak";
       else if (isFinished) status = "Selesai";
 
-      return { ...task, status };
+      return {
+        id: task._id,
+        title: task.title,
+        nopel: task.mainData?.nopel,
+        nop: task.mainData?.nop,
+        newName: task.mainData?.newName,
+        oldName: task.mainData?.oldName,
+        address: task.mainData?.address,
+        currentStage: task.currentStage,
+        status, // overallStatus
+        createdAt: task.createdAt,
+        approvals: task.approvals,
+        additionalData: task.additionalData || null,
+      };
     });
 
-    // --- Final response
+    // --- Filter berdasarkan overallStatus setelah mapping
+    const filteredByStatus = overallStatus
+      ? formattedTasks.filter(
+          (t) => t.status.toLowerCase() === String(overallStatus).toLowerCase()
+        )
+      : formattedTasks;
+
+    // ==========================
+    // 📦 Kirim Respons
+    // ==========================
     return res.status(200).json({
-      page,
-      limit,
+      page: pageNum,
+      limit: limitNum,
       total: totalCount,
       sortBy: sortField,
       order: sortOrder === 1 ? "asc" : "desc",
-      tasks: formattedTasks,
+      userRole: role,
+      tasks: filteredByStatus,
     });
   } catch (error) {
-    console.error("Error fetching tasks:", error);
+    console.error("🔥 Error saat mengambil task:", error);
     return res.status(500).json({
-      message: "Terjadi kesalahan saat mengambil data task",
+      message: "Terjadi kesalahan saat mengambil data task.",
       error: error?.message || String(error),
     });
   }

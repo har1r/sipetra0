@@ -13,7 +13,6 @@ import { validateEmail } from "../../utils/helper";
 import UserContext from "../../context/UserContexts";
 import { API_PATHS } from "../../utils/apiPaths";
 
-// ✅ Mapping tahapan ke role backend
 const stageToRoleMap = {
   Diinput: "penginput",
   Ditata: "penata",
@@ -40,7 +39,6 @@ const SignUp = () => {
   const [selectedStage, setSelectedStage] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // 🔠 Ambil inisial nama
   const getInitials = (fullName) => {
     if (!fullName) return "";
     const parts = fullName.trim().split(" ");
@@ -98,11 +96,7 @@ const SignUp = () => {
       if (!token || !user)
         throw new Error("Token atau data pengguna tidak ditemukan.");
 
-      const userWithInitials = {
-        ...user,
-        initials: getInitials(user.name),
-      };
-
+      const userWithInitials = { ...user, initials: getInitials(user.name) };
       localStorage.setItem("token", token);
       updateUser(userWithInitials);
       toast.success(message || "Registrasi berhasil!");
@@ -124,10 +118,10 @@ const SignUp = () => {
     <AuthLayout>
       <div className="w-full max-w-sm mx-auto px-3 md:px-0">
         {/* === Heading === */}
-        <h2 className="text-2xl md:text-3xl font-bold text-slate-800 mb-2 text-center md:text-left leading-snug">
+        <h2 className="text-3xl md:text-4xl font-extrabold text-emerald-700 mb-2 text-center md:text-left leading-snug">
           Daftar Akun Baru
         </h2>
-        <p className="text-slate-600 text-sm mb-6 text-center md:text-left">
+        <p className="text-emerald-600/80 text-sm mb-6 text-center md:text-left">
           Isi data berikut untuk membuat akun Anda.
         </p>
 
@@ -179,7 +173,7 @@ const SignUp = () => {
           {!adminInviteToken && (
             <select
               id={stageId}
-              className="w-full rounded-lg border border-slate-300 p-2 text-sm focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+              className="w-full rounded-lg border border-emerald-200 bg-white/70 text-slate-700 p-2 text-sm focus:ring-2 focus:ring-emerald-400 focus:border-emerald-300 transition-all duration-200"
               value={selectedStage}
               onChange={(e) => setSelectedStage(e.target.value)}
             >
@@ -195,14 +189,14 @@ const SignUp = () => {
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full bg-indigo-600 text-white font-semibold py-2.5 rounded-lg shadow-md hover:bg-indigo-700 transition disabled:opacity-60"
+            className="w-full bg-gradient-to-r from-emerald-500 via-green-500 to-lime-500 text-white font-semibold py-2.5 rounded-lg shadow-md hover:brightness-110 transition-all duration-300 disabled:opacity-60"
           >
             {isSubmitting ? "Mendaftarkan..." : "Daftar"}
           </button>
 
           <Link
             to="/login"
-            className="block w-full text-center border border-indigo-600 text-indigo-600 font-semibold py-2.5 rounded-lg hover:bg-indigo-50 transition"
+            className="block w-full text-center border border-emerald-500 text-emerald-600 font-semibold py-2.5 rounded-lg hover:bg-emerald-50 transition-all duration-300"
           >
             Masuk Ke Akun
           </Link>

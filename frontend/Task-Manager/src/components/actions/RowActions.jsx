@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { BiSolidDetail } from "react-icons/bi";
 import { MdEdit, MdDelete } from "react-icons/md";
 import { FcApproval } from "react-icons/fc";
-import { UserContext } from "../../context/UserContexts";
+import UserContext from "../../context/UserContexts";
 
 /**
  * Komponen: RowActions

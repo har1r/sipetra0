@@ -1,11 +1,10 @@
 export const toTitle = (s = "") =>
   String(s)
-    .split(/(\s+|_)/)
-    .map((part) =>
-      /^[\s_]+$/.test(part)
-        ? part
-        : part.charAt(0).toUpperCase() + part.slice(1).toLowerCase()
-    )
-    .join("");
+    .split(/[\s_]+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
 
-export const toUpper = (s = "") => String(s).toUpperCase();
+export const toUpper = (text = "") => String(text).toUpperCase();
+
+export const toNumber = (value) => (Number.isFinite(+value) ? +value : 0);

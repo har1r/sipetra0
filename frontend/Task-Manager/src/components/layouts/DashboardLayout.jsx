@@ -17,16 +17,18 @@ const DashboardLayout = ({ children }) => {
   if (!user) return null; // User is not logged in
 
   return (
-    <div className="min-h-screen flex flex-col bg-gray-50">
+    <div className="min-h-screen flex flex-col bg-gradient-to-br from-lime-50 via-green-100 to-emerald-50 text-gray-800 ">
       <Navbar />
       <div className="flex flex-1">
         {/* Side menu */}
-        <aside className="hidden lg:block w-64 border-r border-gray-200/50">
+        <aside className="hidden lg:block w-64 border-r border-emerald-200/40 bg-white/70 shadow-sm">
           <SideMenu />
         </aside>
 
         {/* Main content */}
-        <main className="flex-1 p-5 overflow-x-auto">{children}</main>
+        <main className="flex-1 p-6 overflow-x-auto bg-white/60 shadow-inner">
+          {children}
+        </main>
       </div>
     </div>
   );

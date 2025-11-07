@@ -42,30 +42,19 @@
   @apply w-full text-sm text-black outline-none bg-white border border-slate-100 px-2.5 py-3 rounded-md mt-2 placeholder:text-gray-500;
 }
 
-@keyframes twinkle {
-  0%,
-  100% {
-    opacity: 0.2;
+@keyframes fall {
+  0% {
+    transform: translateY(-10%) rotate(0deg);
+    opacity: 1;
   }
-  50% {
+  100% {
+    transform: translateY(110vh) rotate(360deg);
     opacity: 0.5;
   }
 }
 
-@keyframes twinkle-slow {
-  0%,
-  100% {
-    opacity: 0.1;
+@layer utilities {
+  .animate-fall {
+    animation: fall linear infinite;
   }
-  50% {
-    opacity: 0.3;
-  }
-}
-
-.animate-twinkle {
-  animation: twinkle 4s infinite ease-in-out alternate;
-}
-
-.animate-twinkle-slow {
-  animation: twinkle-slow 7s infinite ease-in-out alternate;
 }
