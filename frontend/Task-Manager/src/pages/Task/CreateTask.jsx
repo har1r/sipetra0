@@ -116,7 +116,7 @@ const CreateTask = () => {
       if (response?.data) {
         toast.success("Berkas berhasil dibuat.");
       }
-      navigate(user?.role === "admin" ? "/admin/tasks" : "/user/tasks");
+      navigate("/manage-task/task");
     } catch (error) {
       console.error("❌ createTask Error:", error.message);
       const backendMsg = error?.response?.data?.message;

@@ -9,6 +9,7 @@ import React, {
   Suspense,
 } from "react";
 import toast from "react-hot-toast";
+
 import axiosInstance from "../../utils/axiosInstance";
 import { API_PATHS } from "../../utils/apiPaths";
 import { formatDateId } from "../../utils/formatDateId";
@@ -70,6 +71,7 @@ const ActionButton = memo(
         disabled={isLoading}
         aria-busy={isLoading}
         className={`${base} ${colorCls}`}
+        displayName={"ActionButton"}
       >
         {isLoading
           ? action === "approved"
@@ -80,14 +82,13 @@ const ActionButton = memo(
     );
   }
 );
-ActionButton.displayName = "ActionButton";
 
 /* ================= Komponen Utama ================= */
 const ApprovalModal = ({ taskId, onClose, onSuccess, userRole }) => {
   const [note, setNote] = useState("");
-  const [loadingAction, setLoadingAction] = useState("");
   const [task, setTask] = useState(null);
   const [loadingTask, setLoadingTask] = useState(true);
+  const [loadingAction, setLoadingAction] = useState("");
 
   const noteId = useId();
   const abortRef = useRef(null);
@@ -195,6 +196,7 @@ const ApprovalModal = ({ taskId, onClose, onSuccess, userRole }) => {
   );
 
   if (!taskId) return null;
+  console.log("🚀 Render ApprovalModal untuk taskId:" + task);
 
   /* === Pastikan struktur data selalu aman === */
   const safeMain = task?.mainData || {};
@@ -280,18 +282,17 @@ const ApprovalModal = ({ taskId, onClose, onSuccess, userRole }) => {
                 </button>
 
                 {/* Tampilkan tombol reject hanya jika peneliti di tahap 'diteliti' */}
-                {(userRole === "peneliti" &&
-                  task.currentStage === "diteliti") ||
-                userRole === "admin" ? (
-                  <ActionButton
-                    action="rejected"
-                    loadingAction={loadingAction}
-                    onClick={() => handleApproval("rejected")}
-                    color="red"
-                  >
-                    Tolak
-                  </ActionButton>
-                ) : null}
+                {["peneliti", "admin"].includes(userRole) &&
+                  task.currentStage === "diteliti" && (
+                    <ActionButton
+                      action="rejected"
+                      loadingAction={loadingAction}
+                      onClick={() => handleApproval("rejected")}
+                      color="red"
+                    >
+                      Tolak
+                    </ActionButton>
+                  )}
 
                 <ActionButton
                   action="approved"

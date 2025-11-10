@@ -215,7 +215,9 @@ const approveTask = async (req, res) => {
     }
 
     if (!taskId || !mongoose.Types.ObjectId.isValid(taskId)) {
-      return res.status(400).json({ message: "Id berkas permohonan tidak valid." });
+      return res
+        .status(400)
+        .json({ message: "Id berkas permohonan tidak valid." });
     }
 
     const safeNote =
@@ -228,11 +230,13 @@ const approveTask = async (req, res) => {
       .select(
         "currentStage approvals title mainData.nop mainData.nopel createdAt"
       )
-      .populate("approvals.approverId", "role name email")
+      .populate("approvals.approverId", "role name")
       .lean();
 
     if (!task)
-      return res.status(404).json({ message: "Berkas permohonan tidak ditemukan." });
+      return res
+        .status(404)
+        .json({ message: "Berkas permohonan tidak ditemukan." });
 
     const { currentStage } = task;
     const approvals = Array.isArray(task.approvals) ? task.approvals : [];
@@ -241,9 +245,9 @@ const approveTask = async (req, res) => {
     // 🔧 Ambil stageOrder dari approvals
     // ==========================
     if (approvals.length === 0) {
-      return res
-        .status(400)
-        .json({ message: "Daftar-daftar persetujuan tidak ditemukan atau kosong." });
+      return res.status(400).json({
+        message: "Daftar-daftar persetujuan tidak ditemukan atau kosong.",
+      });
     }
 
     const stageOrder = approvals
@@ -277,7 +281,6 @@ const approveTask = async (req, res) => {
     // ==========================
     const isAdmin = user?.role === "admin";
     const isPeneliti = user?.role === "peneliti";
-    console.log("Approval approverRole:", approval);
 
     if (!isAdmin && currentStage !== stageMap[user?.role]) {
       return res.status(403).json({
@@ -294,14 +297,17 @@ const approveTask = async (req, res) => {
       !(isPeneliti && currentStage === "diteliti")
     ) {
       return res.status(403).json({
-        message: "Hanya peneliti di stage 'diteliti' yang dapat melakukan reject.",
+        message:
+          "Hanya peneliti di stage 'diteliti' yang dapat melakukan reject.",
       });
     }
 
     // ==========================
     // 5️⃣ Validasi status saat ini
     // ==========================
-    if (!["in_progress", "rejected"].includes(approval.status || "in_progress")) {
+    if (
+      !["in_progress", "rejected"].includes(approval.status || "in_progress")
+    ) {
       return res.status(400).json({
         message:
           "Peruabahan persetujuan hanya diizinkan dari status 'ditolak' (atau aksi pertama dari 'diproses').",
@@ -324,36 +330,28 @@ const approveTask = async (req, res) => {
     // ==========================
     const setOps = {
       "approvals.$.status": action,
-      "approvals.$.approvedAt": new Date(),
+      "approvals.$.approvedAt": action === "approved" ? new Date() : null,
+      "approvals.$.rejectedAt": action === "rejected" ? new Date() : null,
       "approvals.$.approverId": user._id,
     };
 
     if (safeNote) setOps["approvals.$.note"] = safeNote;
 
+    // Stage logic only — no need to touch overallStatus
     if (action === "approved") {
       setOps.currentStage = nextStage;
-      setOps.isCompleted = nextStage === "selesai";
-      setOps.rejectedStage = null;
     } else {
-      setOps.isCompleted = false;
-      setOps.rejectedStage = currentStage;
+      setOps.currentStage = currentStage;
     }
 
     const updateDoc = {
       $set: setOps,
-      $push: {
-        "approvals.$.history": {
-          prevStatus: approval.status || "in_progress",
-          newStatus: action,
-          at: new Date(),
-          by: user._id,
-          note: safeNote ?? null,
-          type:
-            (approval.status || "in_progress") === "in_progress"
-              ? "approve"
-              : "overwrite",
-        },
-      },
+
+      // Update field rejectedHistory
+      "rejectedHistory.rejectedAct": action === "rejected" ? action : null,
+      "rejectedHistory.rejectedName": action === "rejected" ? user.name : null,
+      "rejectedHistory.rejectedNote": action === "rejected" ? safeNote : null,
+      "rejectedHistory.rejectedAt": action === "rejected" ? new Date() : null,
     };
 
     // ==========================
@@ -380,7 +378,6 @@ const approveTask = async (req, res) => {
         _id: 1,
         title: 1,
         currentStage: 1,
-        isCompleted: 1,
         rejectedStage: 1,
         "mainData.nop": 1,
         "mainData.nopel": 1,
@@ -569,7 +566,6 @@ const approveTask = async (req, res) => {
 //     });
 //   }
 // };
-
 
 // @Deskripsi  Memperbarui data task/berkas
 // @Route      PATCH /api/tasks/:taskId
@@ -1279,9 +1275,7 @@ const getTaskById = async (req, res) => {
 
     // 1️⃣ Validasi parameter dan format ObjectId
     if (!taskId) {
-      return res
-        .status(400)
-        .json({ message: "Parameter taskId wajib diisi." });
+      return res.status(400).json({ message: "Parameter taskId wajib diisi." });
     }
 
     if (!mongoose.Types.ObjectId.isValid(taskId)) {

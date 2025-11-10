@@ -331,9 +331,7 @@ const ManageUserTask = () => {
 
                   return (
                     <React.Fragment key={id}>
-                      <tr
-                        className="relative hover:bg-emerald-50"
-                      >
+                      <tr className="relative hover:bg-emerald-50">
                         <td className="border-b px-3 py-2 text-center">
                           <div className="flex items-center justify-center gap-1">
                             <span>{(currentPage - 1) * limit + index + 1}</span>
@@ -481,6 +479,7 @@ const ManageUserTask = () => {
               fetchTaskList();
               setIsApprovalModalOpen(false);
             }}
+            userRole={userRole}
           />
         )}
       </div>
