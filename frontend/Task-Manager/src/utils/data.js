@@ -16,6 +16,7 @@ export const ROLE = {
   PENELITI: "peneliti",
   PENGARSIP: "pengarsip",
   PENGIRIM: "pengirim",
+  PENGECEK: "pengecek",
 };
 
 export const DEFAULT_ROUTE_BY_ROLE = {
@@ -25,6 +26,7 @@ export const DEFAULT_ROUTE_BY_ROLE = {
   [ROLE.PENELITI]: "/user/dashboard",
   [ROLE.PENGARSIP]: "/user/dashboard",
   [ROLE.PENGIRIM]: "/user/dashboard",
+  [ROLE.PENGECEK]: "/user/dashboard",
 };
 
 /**
@@ -44,8 +46,8 @@ export const ADMIN_MENU = Object.freeze([
     id: "02",
     label: "Kelola Permohonan",
     icon: LuClipboardCheck,
-    path: "/admin/tasks",
-    match: ["/admin/tasks"],
+    path: "/manage-task/task",
+    match: ["/manage-task/task"],
   }),
   Object.freeze({
     id: "03",
@@ -88,8 +90,8 @@ export const USER_MENU = Object.freeze([
     id: "02",
     label: "Kelola Permohonan",
     icon: LuClipboardCheck,
-    path: "/user/tasks",
-    match: ["/user/tasks"],
+    path: "/manage-task/task",
+    match: ["/manage-task/task"],
   }),
   Object.freeze({
     id: "03",

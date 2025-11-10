@@ -6,7 +6,6 @@ import React, {
   useState,
   Suspense,
 } from "react";
-import { toast } from "react-toastify";
 
 import DashboardLayout from "../../components/layouts/DashboardLayout";
 import axiosInstance from "../../utils/axiosInstance";

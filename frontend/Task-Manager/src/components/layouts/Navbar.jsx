@@ -11,8 +11,7 @@ const Navbar = () => {
   return (
     <nav
       className="sticky top-0 z-40 w-full border-b border-emerald-200/50 
-                 bg-gradient-to-r from-emerald-50 via-lime-50 to-white/80 
-                 backdrop-blur-md shadow-sm"
+                 bg-gradient-to-r from-emerald-50 via-lime-50 to-white/80 shadow-sm"
       role="navigation"
       aria-label="main-navigation"
     >

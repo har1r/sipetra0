@@ -34,7 +34,7 @@ const ExportSummary = React.lazy(() =>
   import("./pages/Detail/RecommendationLatter")
 );
 const UserDashboard = React.lazy(() => import("./pages/User/UserDashboard"));
-const ManageUserTask = React.lazy(() => import("./pages/User/ManageUserTask"));
+import ManageTask from "./pages/Detail/ManageTask";
 
 // === Root Redirect (berdasarkan role user) ===
 const RootRedirect = () => {
@@ -73,11 +73,11 @@ const RootRedirect = () => {
     } else {
       prefetchPages.push(
         import("./pages/User/UserDashboard"),
-        import("./pages/User/ManageUserTask")
       );
     }
 
     prefetchPages.push(
+      import("./pages/Detail/ManageTask"),
       import("./pages/Detail/TaskDetail"),
       import("./pages/Detail/RecommendationLatter"),
       import("./pages/Task/CreateTask")
@@ -133,12 +133,12 @@ const App = () => {
                     ROLE.PENELITI,
                     ROLE.PENGARSIP,
                     ROLE.PENGIRIM,
+                    ROLE.PENGECEK,
                   ]}
                 />
               }
             >
               <Route path="/user/dashboard" element={<UserDashboard />} />
-              <Route path="/user/tasks" element={<ManageUserTask />} />
             </Route>
 
             {/* ADMIN + PENGINPUT */}
@@ -162,10 +162,12 @@ const App = () => {
                     ROLE.PENELITI,
                     ROLE.PENGARSIP,
                     ROLE.PENGIRIM,
+                    ROLE.PENGECEK,
                   ]}
                 />
               }
             >
+              <Route path="/manage-task/task" element={<ManageTask />} />
               <Route
                 path="/document/recommendation-latter"
                 element={<ExportSummary />}

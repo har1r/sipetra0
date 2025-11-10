@@ -7,7 +7,6 @@ import React, {
   useState,
   useContext,
 } from "react";
-import { toast } from "react-toastify";
 import DashboardLayout from "../../components/layouts/DashboardLayout";
 import TaskFilter from "../../components/filters/TaskFilter";
 import Pagination from "../../components/ui/Pagination";
@@ -15,7 +14,7 @@ import ApprovalModal from "../../components/modals/ApprovalModal";
 import TableSkeleton from "../../components/Skeletons/TableSkeleton";
 import axiosInstance from "../../utils/axiosInstance";
 import { API_PATHS } from "../../utils/apiPaths";
-import { UserContext } from "../../context/UserContexts";
+import UserContext from "../../context/UserContexts";
 
 const TaskTable = React.lazy(() => import("../../components/tabels/TaskTable"));
 
