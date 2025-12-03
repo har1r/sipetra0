@@ -7,6 +7,8 @@ import React, {
   useContext,
 } from "react";
 
+import { FcApproval } from "react-icons/fc";
+
 import DashboardLayout from "../../components/layouts/DashboardLayout";
 import Pagination from "../../components/ui/Pagination";
 import ApprovalModal from "../../components/modals/ApprovalModal";
@@ -442,7 +444,15 @@ const ManageUserTask = () => {
                                 {task.status}
                               </span>
                             </td>
-                            <td></td>
+                            <td className="border-b px-3 py-2 text-center">
+                              <button
+                                type="button"
+                                title="Approval Task"
+                                className={`rounded-full p-1.5 sm:p-2 transition bg-green-100 hover:bg-green-200`}
+                              >
+                                <FcApproval className="text-lg sm:text-xl" />
+                              </button>
+                            </td>
                           </tr>
                         ))}
                     </React.Fragment>

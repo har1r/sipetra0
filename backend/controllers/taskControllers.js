@@ -567,6 +567,135 @@ const approveTask = async (req, res) => {
 //   }
 // };
 
+// @Deskripsi Mengupdate approval
+// @Route     PATCH /api/tasks/:taskId/additional/:index/approve"
+// @Access    Private (hanya admin dan pengecek yang bisa approve)
+const approveAdditionalItem = async (req, res) => {
+  try {
+    const { taskId, index } = req.params;
+    const { action, note } = req.body;
+    const user = req.user;
+
+    // 1️⃣ Validasi action
+    if (!["approved", "rejected"].includes(action)) {
+      return res.status(400).json({
+        message: "Aksi harus berupa 'approved' atau 'rejected'.",
+      });
+    }
+
+    // 2️⃣ Validasi ID task
+    if (!mongoose.Types.ObjectId.isValid(taskId)) {
+      return res.status(400).json({
+        message: "ID task tidak valid.",
+      });
+    }
+
+    // 3️⃣ Ambil task minimal
+    const task = await Task.findById(taskId)
+      .select("currentStage additionalData overallStatus")
+      .lean();
+
+    if (!task) {
+      return res.status(404).json({ message: "Task tidak ditemukan." });
+    }
+
+    // 4️⃣ Hanya boleh dieksekusi di tahap selesai
+    if (task.currentStage !== "selesai") {
+      return res.status(400).json({
+        message: "Approval pecahan hanya dapat dilakukan pada tahap 'selesai'.",
+      });
+    }
+
+    // 5️⃣ Validasi role
+    if (!["admin", "pengecek"].includes(user.role)) {
+      return res.status(403).json({
+        message: "Anda tidak memiliki izin untuk menyetujui data pecahan.",
+      });
+    }
+
+    // 6️⃣ Validasi index pecahan
+    const itemIndex = parseInt(index, 10);
+    if (
+      isNaN(itemIndex) ||
+      itemIndex < 0 ||
+      itemIndex >= task.additionalData.length
+    ) {
+      return res.status(400).json({
+        message: "Index additionalData tidak valid.",
+      });
+    }
+
+    // 7️⃣ Siapkan update objek untuk item pecahan
+    const setOps = {};
+    setOps[`additionalData.${itemIndex}.addStatus`] = action;
+
+    if (note) {
+      setOps[`additionalData.${itemIndex}.note`] = note.trim().slice(0, 500);
+    }
+
+    // 8️⃣ Update item pecahan dulu
+    await Task.updateOne({ _id: taskId }, { $set: setOps });
+
+    // Ambil ulang data setelah update
+    const refreshed = await Task.findById(taskId).lean();
+
+    // 9️⃣ Jika salah satu pecahan ditolak
+    if (action === "rejected") {
+      await Task.updateOne(
+        { _id: taskId },
+        {
+          $set: {
+            overallStatus: "rejected",
+            "rejectedHistory.rejectedAct": "rejected",
+            "rejectedHistory.rejectedName": user.name,
+            "rejectedHistory.rejectedNote": note || null,
+            "rejectedHistory.rejectedAt": new Date(),
+          },
+        }
+      );
+
+      return res.status(200).json({
+        message: `Pecahan ke-${
+          itemIndex + 1
+        } ditolak. Task berubah menjadi rejected.`,
+      });
+    }
+
+    // 🔟 Jika semua pecahan sudah approved → task approved
+    const allApproved = refreshed.additionalData.every(
+      (item) => item.addStatus === "approved"
+    );
+
+    if (allApproved) {
+      await Task.updateOne(
+        { _id: taskId },
+        {
+          $set: {
+            overallStatus: "approved",
+          },
+        }
+      );
+
+      return res.status(200).json({
+        message: `Semua pecahan disetujui. Task selesai dan approved.`,
+      });
+    }
+
+    // Jika masih ada yang in_progress
+    return res.status(200).json({
+      message: `Pecahan ke-${
+        itemIndex + 1
+      } berhasil ${action}. Menunggu item lain disetujui.`,
+    });
+  } catch (error) {
+    console.error("Error approve additional item:", error);
+    return res.status(500).json({
+      message: "Terjadi kesalahan saat approval pecahan.",
+      error: error.message,
+    });
+  }
+};
+
 // @Deskripsi  Memperbarui data task/berkas
 // @Route      PATCH /api/tasks/:taskId
 // @Access     Private (admin atau approver sesuai stage berjalan)
@@ -1526,6 +1655,7 @@ const getAllUserPerformance = async (req, res) => {
 module.exports = {
   createTask,
   approveTask,
+  approveAdditionalItem,
   updateTask,
   deleteTask,
   getAdminDashboardStats,
