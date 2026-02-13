@@ -2,18 +2,8 @@ const mongoose = require("mongoose");
 const Task = require("../models/Task");
 const moment = require("moment");
 
-// Mapping stage ke role
-const stageToRoleMap = {
-  diinput: "penginput",
-  ditata: "penata",
-  diteliti: "peneliti",
-  diarsipkan: "pengarsip",
-  dikirim: "pengirim",
-  selesai: "pengecek",
-};
-
-// Urutan stage
-const stageOrder = [
+// 1. Definisikan urutan utama (Single Source of Truth)
+const STAGE_ORDER = [
   "diinput",
   "ditata",
   "diteliti",
@@ -22,15 +12,21 @@ const stageOrder = [
   "selesai",
 ];
 
-// --- Stage mapping (role -> stage dokumen)
-const stageMap = {
-  penginput: "diinput",
-  penata: "ditata",
-  peneliti: "diteliti",
-  pengarsip: "diarsipkan",
-  pengirim: "dikirim",
-  pengecek: "selesai",
+// 2. Mapping Stage ke Role (Definisikan manual karena penamaan role mungkin berbeda sedikit)
+const ROLE_STAGE_MAP = {
+  diinput: "penginput",
+  ditata: "penata",
+  diteliti: "peneliti",
+  diarsipkan: "pengarsip",
+  dikirim: "pengirim",
+  selesai: "pengecek",
 };
+
+// 3. Mapping Role ke Stage (Otomatis dibalik dari ROLE_STAGE_MAP)
+// Ini menghindari kesalahan ketik jika kamu punya banyak stage
+const stageMap = Object.fromEntries(
+  Object.entries(ROLE_STAGE_MAP).map(([stage, role]) => [role, stage]),
+);
 
 /**
  * 🧾 Controller: Membuat task baru
@@ -40,29 +36,17 @@ const stageMap = {
  */
 const createTask = async (req, res) => {
   try {
-    const user = req.user;
     const { title, mainData, additionalData, globalNote } = req.body;
+    const userId = req.user._id;
 
-    /* ======================================================
-       1️⃣ Validasi Hak Akses
-    ====================================================== */
-    if (!["admin", "penginput"].includes(user.role)) {
-      return res.status(403).json({
-        message:
-          "Anda tidak memiliki izin untuk membuat berkas permohonan ini.",
-      });
+    // 1. Validasi Input Dasar & Kelengkapan Main Data
+    if (!title || !mainData || !additionalData?.length) {
+      return res
+        .status(400)
+        .json({ message: "Data utama dan pecahan wajib diisi." });
     }
 
-    /* ======================================================
-       2️⃣ Validasi Field Utama
-    ====================================================== */
-    if (!title || !mainData || !additionalData) {
-      return res.status(400).json({
-        message:
-          "Bagian jenis permohonan, data utama, dan data tambahan wajib diisi.",
-      });
-    }
-
+    // Validasi spesifik field Main Data (Kecuali catatan)
     const requiredMainFields = [
       "nopel",
       "nop",
@@ -71,130 +55,232 @@ const createTask = async (req, res) => {
       "village",
       "subdistrict",
     ];
-
     for (const field of requiredMainFields) {
       if (!mainData[field]) {
+        return res
+          .status(400)
+          .json({ message: `Field ${field} pada Data Utama wajib diisi.` });
+      }
+    }
+
+    // 2. Validasi Kelengkapan Additional Data (Pecahan)
+    // Kita cek setiap row, pastikan semua diisi kecuali 'note'
+    for (let i = 0; i < additionalData.length; i++) {
+      const item = additionalData[i];
+      if (
+        !item.newName ||
+        !item.landWide ||
+        !item.buildingWide ||
+        !item.certificate
+      ) {
         return res.status(400).json({
-          message: `Bagian nopel, nop, nama lama, alamat, desa/keluarahan, dan kecamatan pada data utama wajib diisi.`,
+          message: `Data pada pecahan ke-${i + 1} belum lengkap. Mohon isi Nama, Luas, dan Sertifikat.`,
         });
       }
     }
 
-    /* ======================================================
-       3️⃣ Validasi additionalData
-    ====================================================== */
-    if (!Array.isArray(additionalData) || additionalData.length === 0) {
-      return res.status(400).json({
-        message:
-          "Bagian data tambahan harus berupa array dan tidak boleh kosong.",
-      });
+    // 3. Cek Duplikasi NOPEL
+    if (await Task.exists({ "mainData.nopel": mainData.nopel })) {
+      return res
+        .status(400)
+        .json({ message: `Nopel ${mainData.nopel} sudah terdaftar.` });
     }
 
-    for (const [index, item] of additionalData.entries()) {
-      const missingField = !item.newName
-        ? "newName"
-        : typeof item.landWide !== "number"
-        ? "landWide"
-        : typeof item.buildingWide !== "number"
-        ? "buildingWide"
-        : !item.certificate
-        ? "certificate"
-        : null;
-
-      if (missingField) {
-        return res.status(400).json({
-          message: `Bagian nama baru, luas tanah, luas bangunan, dan sertifikat pada data tambahan pecahahan ke-${
-            index + 1
-          } wajib diisi.`,
-        });
-      }
-    }
-
-    /* ======================================================
-       3️⃣ Validasi additionalData
-    ====================================================== */
-    const existingNopel = await Task.findOne({
-      "mainData.nopel": mainData.nopel,
-    }).lean();
-    if (existingNopel) {
-      return res.status(400).json({
-        message: `Nopel dengan nomor ${mainData.nopel} sudah terdaftar pada berkas lain.`,
-      });
-    }
-    /* ======================================================
-       4️⃣ Siapkan Struktur Approvals Default
-    ====================================================== */
-    const approvals = stageOrder.map((stage, index) => ({
-      stageOrder: index + 1,
-      stage,
-      approverRole: stageToRoleMap[stage],
-      approverId: null,
-      approvedAt: null,
-      rejectedAt: null,
-      note: "",
-      status: "in_progress",
-    }));
-
-    /* ======================================================
-       5️⃣ Logika Otomatis Approval Berdasarkan Jenis Title
-    ====================================================== */
-    let currentStage = "diinput"; // default awal
+    // 4. Logika Approval & Staging (Tetap sama seperti kode kamu)
+    const isPengaktifan = title.toLowerCase().includes("pengaktifan");
     const now = new Date();
 
-    if (title.toLowerCase() === "pengaktifan") {
-      // Semua tahap sebelum "selesai" langsung diset approved
-      approvals.forEach((approval) => {
-        if (approval.stage !== "selesai") {
-          approval.status = "approved";
-          approval.approverId = user._id;
-          approval.approvedAt = now;
-          approval.note = "Approved otomatis (jenis pengaktifan)";
-        }
-      });
-      currentStage = "selesai";
-    } else {
-      // Hanya tahap "diinput" yang otomatis diset approved
-      const inputStage = approvals.find((a) => a.stage === "diinput");
-      if (inputStage) {
-        inputStage.status = "approved";
-        inputStage.approverId = user._id;
-        inputStage.approvedAt = now;
-        inputStage.note = "Approved otomatis saat diinput";
-      }
-      currentStage = "ditata"; // lanjut ke tahap berikutnya
-    }
+    const approvals = STAGE_ORDER.map((stage, index) => {
+      const isAutoApprove = isPengaktifan
+        ? stage !== "selesai"
+        : stage === "diinput";
+      return {
+        stageOrder: index + 1,
+        stage,
+        approverId: isAutoApprove ? userId : null,
+        approvedAt: isAutoApprove ? now : null,
+        status: isAutoApprove ? "approved" : "in_progress",
+        note: isAutoApprove
+          ? `Otomatis (${isPengaktifan ? "Pengaktifan" : "Input"})`
+          : "",
+      };
+    });
 
-    /* ======================================================
-       6️⃣ Buat dan Simpan Task Baru
-    ====================================================== */
-    const newTask = new Task({
+    // 5. Create Task
+    const newTask = await Task.create({
       title,
       mainData,
       additionalData,
       globalNote: globalNote || "",
-      createdBy: user._id,
-      currentStage,
-      overallStatus: "in_progress",
+      createdBy: userId,
+      currentStage: isPengaktifan ? "selesai" : "ditata",
       approvals,
     });
 
-    await newTask.save();
-
-    /* ======================================================
-       7️⃣ Kirim Respons Sukses
-    ====================================================== */
-    return res.status(201).json({
-      message: "Berkas berhasil dibuat.",
-      task: newTask,
-    });
+    res.status(201).json({ message: "Berkas berhasil dibuat.", task: newTask });
   } catch (error) {
-    console.error("Error saat membuat berkas permohonan:", error.message);
-    return res.status(500).json({
-      message: "Terjadi kesalahan saat membuat berkas permohonan.",
-      error: process.env.NODE_ENV === "development" ? error.message : undefined,
-    });
+    res
+      .status(500)
+      .json({ message: "Gagal membuat berkas.", error: error.message });
   }
 };
+// const createTask = async (req, res) => {
+//   try {
+//     const user = req.user;
+//     const { title, mainData, additionalData, globalNote } = req.body;
+
+//     /* ======================================================
+//        1️⃣ Validasi Hak Akses
+//     ====================================================== */
+//     if (!["admin", "penginput"].includes(user.role)) {
+//       return res.status(403).json({
+//         message:
+//           "Anda tidak memiliki izin untuk membuat berkas permohonan ini.",
+//       });
+//     }
+
+//     /* ======================================================
+//        2️⃣ Validasi Field Utama
+//     ====================================================== */
+//     if (!title || !mainData || !additionalData) {
+//       return res.status(400).json({
+//         message:
+//           "Bagian jenis permohonan, data utama, dan data tambahan wajib diisi.",
+//       });
+//     }
+
+//     const requiredMainFields = [
+//       "nopel",
+//       "nop",
+//       "oldName",
+//       "address",
+//       "village",
+//       "subdistrict",
+//     ];
+
+//     for (const field of requiredMainFields) {
+//       if (!mainData[field]) {
+//         return res.status(400).json({
+//           message: `Bagian nopel, nop, nama lama, alamat, desa/keluarahan, dan kecamatan pada data utama wajib diisi.`,
+//         });
+//       }
+//     }
+
+//     /* ======================================================
+//        3️⃣ Validasi additionalData
+//     ====================================================== */
+//     if (!Array.isArray(additionalData) || additionalData.length === 0) {
+//       return res.status(400).json({
+//         message:
+//           "Bagian data tambahan harus berupa array dan tidak boleh kosong.",
+//       });
+//     }
+
+//     for (const [index, item] of additionalData.entries()) {
+//       const missingField = !item.newName
+//         ? "newName"
+//         : typeof item.landWide !== "number"
+//         ? "landWide"
+//         : typeof item.buildingWide !== "number"
+//         ? "buildingWide"
+//         : !item.certificate
+//         ? "certificate"
+//         : null;
+
+//       if (missingField) {
+//         return res.status(400).json({
+//           message: `Bagian nama baru, luas tanah, luas bangunan, dan sertifikat pada data tambahan pecahahan ke-${
+//             index + 1
+//           } wajib diisi.`,
+//         });
+//       }
+//     }
+
+//     /* ======================================================
+//        3️⃣ Validasi additionalData
+//     ====================================================== */
+//     const existingNopel = await Task.findOne({
+//       "mainData.nopel": mainData.nopel,
+//     }).lean();
+//     if (existingNopel) {
+//       return res.status(400).json({
+//         message: `Nopel dengan nomor ${mainData.nopel} sudah terdaftar pada berkas lain.`,
+//       });
+//     }
+//     /* ======================================================
+//        4️⃣ Siapkan Struktur Approvals Default
+//     ====================================================== */
+//     const approvals = stageOrder.map((stage, index) => ({
+//       stageOrder: index + 1,
+//       stage,
+//       approverRole: ROLE_STAGE_MAP[stage],
+//       approverId: null,
+//       approvedAt: null,
+//       rejectedAt: null,
+//       note: "",
+//       status: "in_progress",
+//     }));
+
+//     /* ======================================================
+//        5️⃣ Logika Otomatis Approval Berdasarkan Jenis Title
+//     ====================================================== */
+//     let currentStage = "diinput"; // default awal
+//     const now = new Date();
+
+//     if (title.toLowerCase() === "pengaktifan") {
+//       // Semua tahap sebelum "selesai" langsung diset approved
+//       approvals.forEach((approval) => {
+//         if (approval.stage !== "selesai") {
+//           approval.status = "approved";
+//           approval.approverId = user._id;
+//           approval.approvedAt = now;
+//           approval.note = "Approved otomatis (jenis pengaktifan)";
+//         }
+//       });
+//       currentStage = "selesai";
+//     } else {
+//       // Hanya tahap "diinput" yang otomatis diset approved
+//       const inputStage = approvals.find((a) => a.stage === "diinput");
+//       if (inputStage) {
+//         inputStage.status = "approved";
+//         inputStage.approverId = user._id;
+//         inputStage.approvedAt = now;
+//         inputStage.note = "Approved otomatis saat diinput";
+//       }
+//       currentStage = "ditata"; // lanjut ke tahap berikutnya
+//     }
+
+//     /* ======================================================
+//        6️⃣ Buat dan Simpan Task Baru
+//     ====================================================== */
+//     const newTask = new Task({
+//       title,
+//       mainData,
+//       additionalData,
+//       globalNote: globalNote || "",
+//       createdBy: user._id,
+//       currentStage,
+//       overallStatus: "in_progress",
+//       approvals,
+//     });
+
+//     await newTask.save();
+
+//     /* ======================================================
+//        7️⃣ Kirim Respons Sukses
+//     ====================================================== */
+//     return res.status(201).json({
+//       message: "Berkas berhasil dibuat.",
+//       task: newTask,
+//     });
+//   } catch (error) {
+//     console.error("Error saat membuat berkas permohonan:", error.message);
+//     return res.status(500).json({
+//       message: "Terjadi kesalahan saat membuat berkas permohonan.",
+//       error: process.env.NODE_ENV === "development" ? error.message : undefined,
+//     });
+//   }
+// };
 
 // @Deskripsi Mengupdate approval
 // @Route     PATCH /api/tasks/approve/:taskId
@@ -202,213 +288,296 @@ const createTask = async (req, res) => {
 const approveTask = async (req, res) => {
   try {
     const { taskId } = req.params;
-    const { action, note } = req.body;
+    const { action, note, itemApprovals } = req.body; // action: 'approved' atau 'rejected'
     const user = req.user;
 
-    // ==========================
-    // 1️⃣ Validasi input dasar
-    // ==========================
-    if (!["approved", "rejected"].includes(action)) {
-      return res
-        .status(400)
-        .json({ message: "aksi harus berupa 'disetujui' atau 'ditolak'." });
-    }
-
-    if (!taskId || !mongoose.Types.ObjectId.isValid(taskId)) {
-      return res
-        .status(400)
-        .json({ message: "Id berkas permohonan tidak valid." });
-    }
-
-    const safeNote =
-      typeof note === "string" ? note.trim().slice(0, 1000) : undefined;
-
-    // ==========================
-    // 2️⃣ Ambil data minimal task
-    // ==========================
-    const task = await Task.findById(taskId)
-      .select(
-        "title mainData.nopel mainData.nop currentStage approvals createdAt"
-      )
-      .populate("approvals.approverId", "role name")
-      .lean();
-
+    const task = await Task.findById(taskId);
     if (!task)
-      return res
-        .status(404)
-        .json({ message: "Berkas permohonan tidak ditemukan." });
+      return res.status(404).json({ message: "Berkas tidak ditemukan." });
 
-    const { currentStage } = task;
-    const approvals = Array.isArray(task.approvals) ? task.approvals : [];
+    const currentStage = task.currentStage;
+    const STAGES = [
+      "diinput",
+      "ditata",
+      "diteliti",
+      "diarsipkan",
+      "dikirim",
+      "selesai",
+    ];
+    const currentIdx = STAGES.indexOf(currentStage);
 
-    // ==========================
-    // 🔧 Ambil stageOrder dari approvals
-    // ==========================
-    if (approvals.length === 0) {
-      return res.status(400).json({
-        message: "Daftar-daftar persetujuan tidak ditemukan atau kosong.",
+    // 1. Update Status Pecahan (additionalData)
+    if (itemApprovals && Array.isArray(itemApprovals)) {
+      task.additionalData = task.additionalData.map((item, idx) => {
+        const update = itemApprovals.find((a) => a.index === idx);
+        if (update) {
+          // Sesuaikan dengan enum additionalDataSchema: in_progress/approved
+          item.addStatus =
+            update.status === "selesai" ? "approved" : "in_progress";
+        }
+        return item;
       });
     }
 
-    const stageOrder = approvals
-      .slice() // clone array
-      .sort((a, b) => a.stageOrder - b.stageOrder)
-      .map((a) => a.stage);
-
-    if (!Array.isArray(stageOrder) || stageOrder.length === 0) {
-      return res
-        .status(400)
-        .json({ message: "Urutan tahapan tidak ditemukan atau kosong." });
-    }
-
-    const stageIdx = stageOrder.indexOf(currentStage);
-    if (stageIdx === -1) {
-      return res
-        .status(400)
-        .json({ message: "Tahapan saat ini tidak valid pada workflow." });
-    }
-
-    const approval = approvals.find((value) => value?.stage === currentStage);
-
-    if (!approval) {
-      return res
-        .status(400)
-        .json({ message: "Tahap persetujuan tidak ditemukan." });
-    }
-
-    // ==========================
-    // 3️⃣ Role check
-    // ==========================
-    const isAdmin = user?.role === "admin";
-    const isPeneliti = user?.role === "peneliti";
-
-    if (!isAdmin && currentStage !== stageMap[user?.role]) {
-      return res.status(403).json({
-        message: "Anda tidak memiliki izin untuk menyetujui tahapan ini.",
-      });
-    }
-
-    // ==========================
-    // 4️⃣ Batasi hak reject
-    // ==========================
-    if (
-      action === "rejected" &&
-      !isAdmin &&
-      !(isPeneliti && currentStage === "diteliti")
-    ) {
-      return res.status(403).json({
-        message:
-          "Hanya peneliti di stage 'diteliti' yang dapat melakukan reject.",
-      });
-    }
-
-    // ==========================
-    // 5️⃣ Validasi status saat ini
-    // ==========================
-    if (
-      !["in_progress", "rejected"].includes(approval.status || "in_progress")
-    ) {
-      return res.status(400).json({
-        message:
-          "Peruabahan persetujuan hanya diizinkan dari status 'ditolak' (atau aksi pertama dari 'diproses').",
-      });
-    }
-
-    // ==========================
-    // 6️⃣ Hitung next stage bila approved
-    // ==========================
-    const lastIdx = stageOrder.length - 1;
-    const nextStage =
-      action === "approved"
-        ? stageIdx < lastIdx
-          ? stageOrder[stageIdx + 1]
-          : "selesai"
-        : currentStage;
-
-    // ==========================
-    // 7️⃣ Siapkan operasi update atomik
-    // ==========================
-    const setOps = {
-      "approvals.$.status": action,
-      "approvals.$.approvedAt": action === "approved" ? new Date() : null,
-      "approvals.$.rejectedAt": action === "rejected" ? new Date() : null,
-      "approvals.$.approverId": user._id,
-    };
-
-    if (safeNote) setOps["approvals.$.note"] = safeNote;
-
-    // Stage logic only — no need to touch overallStatus
+    // 2. Logika Persetujuan
     if (action === "approved") {
-      setOps.currentStage = nextStage;
-    } else {
-      setOps.currentStage = currentStage;
+      if (currentStage === "selesai") {
+        // Cek apakah semua pecahan sudah approved
+        const unfinished = task.additionalData.filter(
+          (item) => item.addStatus !== "approved",
+        );
+        if (unfinished.length > 0) {
+          return res.status(400).json({
+            message: `Gagal. Masih ada ${unfinished.length} pecahan yang belum diverifikasi.`,
+          });
+        }
+      } else {
+        // Pindah ke stage berikutnya
+        const nextStage = STAGES[currentIdx + 1];
+        task.currentStage = nextStage;
+
+        // PENTING: Pastikan stage berikutnya ada di array approvals agar tidak dianggap "semua selesai" oleh middleware
+        const nextExists = task.approvals.some((a) => a.stage === nextStage);
+        if (!nextExists) {
+          task.approvals.push({
+            stageOrder: currentIdx + 2,
+            stage: nextStage,
+            status: "in_progress",
+          });
+        }
+      }
     }
 
-    const updateDoc = {
-      $set: setOps,
-
-      // Update field rejectedHistory
-      "rejectedHistory.rejectedAct": action === "rejected" ? action : null,
-      "rejectedHistory.rejectedName": action === "rejected" ? user.name : null,
-      "rejectedHistory.rejectedNote": action === "rejected" ? safeNote : null,
-      "rejectedHistory.rejectedAt": action === "rejected" ? new Date() : null,
-    };
-
-    // ==========================
-    // 8️⃣ Query aman untuk update
-    // ==========================
-    const query = {
-      _id: taskId,
-      currentStage,
-      approvals: {
-        $elemMatch: {
-          stage: currentStage,
-          status: approval.status || "in_progress",
-        },
-      },
-    };
-
-    // ==========================
-    // 9️⃣ Jalankan update
-    // ==========================
-    const updated = await Task.findOneAndUpdate(query, updateDoc, {
-      new: true,
-      runValidators: true,
-      projection: {
-        _id: 1,
-        title: 1,
-        currentStage: 1,
-        rejectedStage: 1,
-        "mainData.nop": 1,
-        "mainData.nopel": 1,
-        approvals: 1,
-        createdAt: 1,
-      },
-    });
-
-    if (!updated) {
-      return res.status(409).json({
-        message:
-          "Task berubah di server (stage/status tidak lagi sesuai). Muat ulang data lalu coba lagi.",
-      });
+    // 3. Update status approval tahap saat ini
+    const approvalEntry = task.approvals.find((a) => a.stage === currentStage);
+    if (approvalEntry) {
+      approvalEntry.status = action; // 'approved' atau 'rejected'
+      approvalEntry.approverId = user._id;
+      approvalEntry.approvedAt = new Date();
+      approvalEntry.note = note || "";
     }
 
-    // ==========================
-    // 🔟 Kirim respons sukses
-    // ==========================
-    res.set("Cache-Control", "no-store");
-    return res.status(200).json({
-      message: `Task ${action} di stage '${currentStage}'.`,
-      task: updated,
-    });
+    // Middleware pre("save") di model akan otomatis mengupdate overallStatus
+    await task.save();
+
+    return res.status(200).json({ message: "Berhasil diperbarui", task });
   } catch (error) {
-    console.error("Error approving task:", error);
-    return res.status(500).json({
-      message: "Terjadi kesalahan saat approve task.",
-      error: error?.message || String(error),
-    });
+    return res.status(500).json({ message: "Error", error: error.message });
   }
 };
+
+// const approveTask = async (req, res) => {
+//   try {
+//     const { taskId } = req.params;
+//     const { action, note } = req.body;
+//     const user = req.user;
+
+//     // ==========================
+//     // 1️⃣ Validasi input dasar
+//     // ==========================
+//     if (!["approved", "rejected"].includes(action)) {
+//       return res
+//         .status(400)
+//         .json({ message: "aksi harus berupa 'disetujui' atau 'ditolak'." });
+//     }
+
+//     if (!taskId || !mongoose.Types.ObjectId.isValid(taskId)) {
+//       return res
+//         .status(400)
+//         .json({ message: "Id berkas permohonan tidak valid." });
+//     }
+
+//     const safeNote =
+//       typeof note === "string" ? note.trim().slice(0, 1000) : undefined;
+
+//     // ==========================
+//     // 2️⃣ Ambil data minimal task
+//     // ==========================
+//     const task = await Task.findById(taskId)
+//       .select(
+//         "title mainData.nopel mainData.nop currentStage approvals createdAt",
+//       )
+//       .populate("approvals.approverId", "role name")
+//       .lean();
+
+//     if (!task)
+//       return res
+//         .status(404)
+//         .json({ message: "Berkas permohonan tidak ditemukan." });
+
+//     const { currentStage } = task;
+//     const approvals = Array.isArray(task.approvals) ? task.approvals : [];
+
+//     // ==========================
+//     // 🔧 Ambil stageOrder dari approvals
+//     // ==========================
+//     if (approvals.length === 0) {
+//       return res.status(400).json({
+//         message: "Daftar-daftar persetujuan kosong.",
+//       });
+//     }
+
+//     const stageOrder = approvals
+//       .slice() // clone array
+//       .sort((a, b) => a.stageOrder - b.stageOrder)
+//       .map((a) => a.stage);
+
+//     if (!Array.isArray(stageOrder) || stageOrder.length === 0) {
+//       return res
+//         .status(400)
+//         .json({ message: "Urutan tahapan tidak ditemukan atau kosong." });
+//     }
+
+//     const stageIdx = stageOrder.indexOf(currentStage);
+//     if (stageIdx === -1) {
+//       return res
+//         .status(400)
+//         .json({ message: "Tahapan saat ini tidak valid pada workflow." });
+//     }
+
+//     const approval = approvals.find((value) => value?.stage === currentStage);
+
+//     if (!approval) {
+//       return res
+//         .status(400)
+//         .json({ message: "Tahap persetujuan tidak ditemukan." });
+//     }
+
+//     // // ==========================
+//     // // 3️⃣ Role check
+//     // // ==========================
+//     // const isAdmin = user?.role === "admin";
+//     // const isPeneliti = user?.role === "peneliti";
+
+//     // if (!isAdmin && currentStage !== stageMap[user?.role]) {
+//     //   return res.status(403).json({
+//     //     message: "Anda tidak memiliki izin untuk menyetujui tahapan ini.",
+//     //   });
+//     // }
+
+//     // // ==========================
+//     // // 4️⃣ Batasi hak reject
+//     // // ==========================
+//     const isAdmin = user?.role === "admin";
+//     const isPeneliti = user?.role === "peneliti";
+//     if (
+//       action === "rejected" &&
+//       !isAdmin &&
+//       !(isPeneliti && currentStage === "diteliti")
+//     ) {
+//       return res.status(403).json({
+//         message:
+//           "Hanya peneliti di stage 'diteliti' yang dapat melakukan reject.",
+//       });
+//     }
+
+//     // ==========================
+//     // 5️⃣ Validasi status saat ini
+//     // ==========================
+//     if (
+//       !["in_progress", "rejected"].includes(approval.status || "in_progress")
+//     ) {
+//       return res.status(400).json({
+//         message:
+//           "Peruabahan persetujuan hanya diizinkan dari status 'ditolak' (atau aksi pertama dari 'diproses').",
+//       });
+//     }
+
+//     // ==========================
+//     // 6️⃣ Hitung next stage bila approved
+//     // ==========================
+//     const lastIdx = stageOrder.length - 1;
+//     const nextStage =
+//       action === "approved"
+//         ? stageIdx < lastIdx
+//           ? stageOrder[stageIdx + 1]
+//           : "selesai"
+//         : currentStage;
+
+//     // ==========================
+//     // 7️⃣ Siapkan operasi update atomik
+//     // ==========================
+//     const setOps = {
+//       "approvals.$.status": action,
+//       "approvals.$.approvedAt": action === "approved" ? new Date() : null,
+//       "approvals.$.rejectedAt": action === "rejected" ? new Date() : null,
+//       "approvals.$.approverId": user._id,
+//     };
+
+//     if (safeNote) setOps["approvals.$.note"] = safeNote;
+
+//     // Stage logic only — no need to touch overallStatus
+//     if (action === "approved") {
+//       setOps.currentStage = nextStage;
+//     } else {
+//       setOps.currentStage = currentStage;
+//     }
+
+//     const updateDoc = {
+//       $set: setOps,
+
+//       // Update field rejectedHistory
+//       "rejectedHistory.rejectedAct": action === "rejected" ? action : null,
+//       "rejectedHistory.rejectedName": action === "rejected" ? user.name : null,
+//       "rejectedHistory.rejectedNote": action === "rejected" ? safeNote : null,
+//       "rejectedHistory.rejectedAt": action === "rejected" ? new Date() : null,
+//     };
+
+//     // ==========================
+//     // 8️⃣ Query aman untuk update
+//     // ==========================
+//     const query = {
+//       _id: taskId,
+//       currentStage,
+//       approvals: {
+//         $elemMatch: {
+//           stage: currentStage,
+//           status: approval.status || "in_progress",
+//         },
+//       },
+//     };
+
+//     // ==========================
+//     // 9️⃣ Jalankan update
+//     // ==========================
+//     const updated = await Task.findOneAndUpdate(query, updateDoc, {
+//       new: true,
+//       runValidators: true,
+//       projection: {
+//         _id: 1,
+//         title: 1,
+//         currentStage: 1,
+//         rejectedStage: 1,
+//         "mainData.nop": 1,
+//         "mainData.nopel": 1,
+//         approvals: 1,
+//         createdAt: 1,
+//       },
+//     });
+
+//     if (!updated) {
+//       return res.status(409).json({
+//         message:
+//           "Task berubah di server (stage/status tidak lagi sesuai). Muat ulang data lalu coba lagi.",
+//       });
+//     }
+
+//     // ==========================
+//     // 🔟 Kirim respons sukses
+//     // ==========================
+//     res.set("Cache-Control", "no-store");
+//     return res.status(200).json({
+//       message: `Task ${action} di stage '${currentStage}'.`,
+//       task: updated,
+//     });
+//   } catch (error) {
+//     console.error("Error approving task:", error);
+//     return res.status(500).json({
+//       message: "Terjadi kesalahan saat approve task.",
+//       error: error?.message || String(error),
+//     });
+//   }
+// };
 
 // @Deskripsi  Memperbarui data task/berkas
 // @Route      PATCH /api/tasks/:taskId
@@ -427,7 +596,7 @@ const updateTask = async (req, res) => {
 
     // --- Validasi role (selaras createTask) ---
     // Admin boleh update semua; non-admin harus sesuai role stage yang berjalan.
-    const requiredRoleForStage = stageToRoleMap[task.currentStage]; // contoh: 'penginput' untuk 'diinput'
+    const requiredRoleForStage = ROLE_STAGE_MAP[task.currentStage]; // contoh: 'penginput' untuk 'diinput'
     const isAllowed =
       user.role === "admin" ||
       (requiredRoleForStage && user.role === requiredRoleForStage);
@@ -572,7 +741,7 @@ const getAdminDashboardStats = async (req, res) => {
     const currentPage = Math.max(1, Number(req.query.page) || 1);
     const itemsPerPage = Math.min(
       MAX_LIMIT,
-      Math.max(1, Number(req.query.limit) || 5)
+      Math.max(1, Number(req.query.limit) || 5),
     );
     const skip = (currentPage - 1) * itemsPerPage;
 
@@ -710,13 +879,13 @@ const getAdminDashboardStats = async (req, res) => {
       const endOfThatWeek = startOfWeek.clone().endOf("isoWeek");
 
       const label = `${startOfWeek.format("DD")}–${endOfThatWeek.format(
-        "DD MMM"
+        "DD MMM",
       )}`;
 
       const foundWeek = weeklyAggregation.find(
         (w) =>
           w._id.year === startOfWeek.isoWeekYear() &&
-          w._id.week === startOfWeek.isoWeek()
+          w._id.week === startOfWeek.isoWeek(),
       );
 
       return { label, total: foundWeek ? foundWeek.total : 0 };
@@ -778,7 +947,7 @@ const getUserDashboardStats = async (req, res) => {
     const currentPage = Math.max(1, Number(req.query.page) || 1);
     const itemsPerPage = Math.min(
       MAX_LIMIT,
-      Math.max(1, Number(req.query.limit) || 5)
+      Math.max(1, Number(req.query.limit) || 5),
     );
     const skip = (currentPage - 1) * itemsPerPage;
 
@@ -905,75 +1074,54 @@ const getUserDashboardStats = async (req, res) => {
 const getAllTasks = async (req, res) => {
   try {
     const user = req.user;
-    if (!user) {
-      return res
-        .status(401)
-        .json({ message: "Kamu tidak punya akses, silahkan login dulu" });
-    }
+    if (!user) return res.status(401).json({ message: "Silahkan login dulu" });
 
-    // ==========================
-    // 🧠 Variabel Dasar
-    // ==========================
     const role = String(user.role || "").toLowerCase();
     const isAdmin = role === "admin";
 
-    // ==========================
-    // 🔍 Ambil Query Params
-    // ==========================
+    // 🔍 Ambil Query Params dari Frontend
     const {
-      title,
-      newName,
       nopel,
-      currentStage,
-      overallStatus, // status hasil: Diproses, Ditolak, Selesai
+      currentStage, // dari filter 'Tahapan'
+      status, // dari filter 'Status' (Diproses/Selesai/Ditolak)
       startDate,
       endDate,
-      sortBy,
-      order,
       page,
       limit,
     } = req.query;
 
-    // ==========================
-    // 🧩 Bangun Query Dinamis
-    // ==========================
     const query = {};
 
-    // --- Search by Title
-    if (title) {
-      const normalizedTitle = String(title).replace(/[_\s]+/g, ".*");
-      query.title = { $regex: normalizedTitle, $options: "i" };
-    }
-
-    // --- Search by New Name
-    if (newName) {
-      query["additionalData.newName"] = {
-        $regex: String(newName).trim(),
-        $options: "i",
-      };
-    }
-
-    // --- Search by Nopel
+    // 1. Filter Nopel (Sesuai input search)
     if (nopel) {
-      query["mainData.nopel"] = {
-        $regex: String(nopel).trim(),
-        $options: "i",
-      };
+      query["mainData.nopel"] = { $regex: String(nopel).trim(), $options: "i" };
     }
 
-    // --- Filter Current Stage
+    // 2. Filter Tahapan (currentStage)
     if (currentStage) {
-      query.currentStage = {
-        $regex: String(currentStage).trim(),
-        $options: "i",
-      };
+      query.currentStage = currentStage; // Exact match lebih baik untuk dropdown
     }
 
-    // --- Filter by Date Range
+    // 3. Filter Status (Logika Database)
+    // Karena 'status' adalah label buatan (Diproses/Ditolak/Selesai),
+    // kita harus ubah kembali ke query MongoDB yang dimengerti database
+    if (status) {
+      const s = status.toUpperCase();
+      if (s === "DITOLAK") {
+        query["approvals.status"] = "rejected";
+      } else if (s === "SELESAI") {
+        query.$or = [{ currentStage: "selesai" }, { isCompleted: true }];
+      } else if (s === "PROSES") {
+        query["approvals.status"] = { $ne: "rejected" };
+        query.currentStage = { $ne: "selesai" };
+        query.isCompleted = { $ne: true };
+      }
+    }
+
+    // 4. Filter Range Tanggal
     if (startDate || endDate) {
       query.createdAt = {};
       if (startDate) query.createdAt.$gte = new Date(startDate);
-
       if (endDate) {
         const end = new Date(endDate);
         end.setHours(23, 59, 59, 999);
@@ -981,126 +1129,264 @@ const getAllTasks = async (req, res) => {
       }
     }
 
-    // ==========================
-    // 📄 Pagination & Sorting
-    // ==========================
-    const MAX_LIMIT = 10;
-    const pageNum = Math.max(1, parseInt(page, 10) || 1);
-    const limitNum = Math.min(
-      MAX_LIMIT,
-      Math.max(1, parseInt(limit, 10) || 10)
-    );
+    // 5. Pagination
+    const pageNum = parseInt(page) || 1;
+    const limitNum = parseInt(limit) || 10;
     const skip = (pageNum - 1) * limitNum;
 
-    const ALLOWED_SORT_FIELDS = ["createdAt", "title", "currentStage"];
-    const sortField = ALLOWED_SORT_FIELDS.includes(sortBy)
-      ? sortBy
-      : "createdAt";
-    const sortOrder = String(order || "desc").toLowerCase() === "asc" ? 1 : -1;
-
-    const sortConfig = { [sortField]: sortOrder };
-
-    // ==========================
-    // 🗂️ Ambil Data dari DB
-    // ==========================
+    // 6. Eksekusi Query (Total count sekarang akurat karena filter dilakukan di DB)
     const [tasks, totalCount] = await Promise.all([
       Task.find(query)
-        .sort(sortConfig)
+        .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limitNum)
-        .select({
-          _id: 1,
-          title: 1,
-          createdAt: 1,
-          currentStage: 1,
-          approvals: 1,
-          isCompleted: 1,
-          "mainData.nop": 1,
-          "mainData.nopel": 1,
-          "mainData.newName": 1,
-          "mainData.oldName": 1,
-          "mainData.address": 1,
-          additionalData: 1,
-        })
         .lean(),
       Task.countDocuments(query),
     ]);
 
-    // ==========================
-    // 🧾 Format Data & Filter Overall Status
-    // ==========================
+    // 7. Mapping Data untuk Frontend
     const formattedTasks = tasks.map((task) => {
+      // Logika label status yang sama dengan ManageTask
       const hasRejection = task.approvals?.some((a) => a.status === "rejected");
       const isFinished =
         task.currentStage === "selesai" || task.isCompleted === true;
 
-      let status = "Diproses";
-      if (hasRejection) status = "Ditolak";
-      else if (isFinished) status = "Selesai";
+      let overallStatus = "PROSES";
+      if (hasRejection) overallStatus = "DITOLAK";
+      else if (isFinished) overallStatus = "SELESAI";
 
-      // --- 🔐 Tentukan akses berdasarkan role dan currentStage
-      let isAccessible = false;
+      // Logika Akses (Hanya yang isAccessible = true yang bisa klik tombol Verifikasi)
+      const accessMap = {
+        penata: "ditata",
+        peneliti: "diteliti",
+        pengarsip: "diarsipkan",
+        pengirim: "dikirim",
+        pengecek: "selesai",
+      };
 
-      // Contoh aturan:
-      if (isAdmin) {
-        isAccessible = true; // Admin bisa akses semua
-      } else if (role === "penata" && task.currentStage === "ditata") {
-        isAccessible = true;
-      } else if (role === "peneliti" && task.currentStage === "diteliti") {
-        isAccessible = true;
-      } else if (role === "pengarsip" && task.currentStage === "diarsipkan") {
-        isAccessible = true;
-      } else if (role === "pengirim" && task.currentStage === "dikirim") {
-        isAccessible = true;
-      } else if (role === "pengecek" && task.currentStage === "selesai") {
-        isAccessible = true;
-      }
+      const isAccessible = isAdmin || accessMap[role] === task.currentStage;
 
       return {
         id: task._id,
-        title: task.title,
         nopel: task.mainData?.nopel,
         nop: task.mainData?.nop,
-        newName: task.mainData?.newName,
-        oldName: task.mainData?.oldName,
-        address: task.mainData?.address,
         currentStage: task.currentStage,
-        status, // overallStatus
+        status: overallStatus, // Ini dikirim ke kolom 'Status' di tabel
         createdAt: task.createdAt,
-        approvals: task.approvals,
-        additionalData: task.additionalData || null,
-        // 🧠 Tambahkan flag akses
-        isAccessible,
+        additionalData: task.additionalData,
+        isAccessible, // Digunakan RowActions untuk disable/enable tombol
       };
     });
 
-    // --- Filter berdasarkan overallStatus setelah mapping
-    const filteredByStatus = overallStatus
-      ? formattedTasks.filter(
-          (t) => t.status.toLowerCase() === String(overallStatus).toLowerCase()
-        )
-      : formattedTasks;
-
-    // ==========================
-    // 📦 Kirim Respons
-    // ==========================
     return res.status(200).json({
       page: pageNum,
       limit: limitNum,
       total: totalCount,
-      sortBy: sortField,
-      order: sortOrder === 1 ? "asc" : "desc",
-      userRole: role,
-      tasks: filteredByStatus,
+      tasks: formattedTasks,
     });
   } catch (error) {
-    console.error("Error saat mengambil berkas permohonan:", error.message);
-    return res.status(500).json({
-      message: "Terjadi kesalahan saat mengambil berkas permohonan.",
-      error: process.env.NODE_ENV === "development" ? error.message : undefined,
-    });
+    res.status(500).json({ message: "Server Error", error: error.message });
   }
 };
+// const getAllTasks = async (req, res) => {
+//   try {
+//     const user = req.user;
+//     if (!user) {
+//       return res
+//         .status(401)
+//         .json({ message: "Kamu tidak punya akses, silahkan login dulu" });
+//     }
+
+//     // ==========================
+//     // 🧠 Variabel Dasar
+//     // ==========================
+//     const role = String(user.role || "").toLowerCase();
+//     const isAdmin = role === "admin";
+
+//     // ==========================
+//     // 🔍 Ambil Query Params
+//     // ==========================
+//     const {
+//       title,
+//       newName,
+//       nopel,
+//       currentStage,
+//       overallStatus, // status hasil: Diproses, Ditolak, Selesai
+//       startDate,
+//       endDate,
+//       sortBy,
+//       order,
+//       page,
+//       limit,
+//     } = req.query;
+
+//     // ==========================
+//     // 🧩 Bangun Query Dinamis
+//     // ==========================
+//     const query = {};
+
+//     // --- Search by Title
+//     if (title) {
+//       const normalizedTitle = String(title).replace(/[_\s]+/g, ".*");
+//       query.title = { $regex: normalizedTitle, $options: "i" };
+//     }
+
+//     // --- Search by New Name
+//     if (newName) {
+//       query["additionalData.newName"] = {
+//         $regex: String(newName).trim(),
+//         $options: "i",
+//       };
+//     }
+
+//     // --- Search by Nopel
+//     if (nopel) {
+//       query["mainData.nopel"] = {
+//         $regex: String(nopel).trim(),
+//         $options: "i",
+//       };
+//     }
+
+//     // --- Filter Current Stage
+//     if (currentStage) {
+//       query.currentStage = {
+//         $regex: String(currentStage).trim(),
+//         $options: "i",
+//       };
+//     }
+
+//     // --- Filter by Date Range
+//     if (startDate || endDate) {
+//       query.createdAt = {};
+//       if (startDate) query.createdAt.$gte = new Date(startDate);
+
+//       if (endDate) {
+//         const end = new Date(endDate);
+//         end.setHours(23, 59, 59, 999);
+//         query.createdAt.$lte = end;
+//       }
+//     }
+
+//     // ==========================
+//     // 📄 Pagination & Sorting
+//     // ==========================
+//     const MAX_LIMIT = 10;
+//     const pageNum = Math.max(1, parseInt(page, 10) || 1);
+//     const limitNum = Math.min(
+//       MAX_LIMIT,
+//       Math.max(1, parseInt(limit, 10) || 10),
+//     );
+//     const skip = (pageNum - 1) * limitNum;
+
+//     const ALLOWED_SORT_FIELDS = ["createdAt", "title", "currentStage"];
+//     const sortField = ALLOWED_SORT_FIELDS.includes(sortBy)
+//       ? sortBy
+//       : "createdAt";
+//     const sortOrder = String(order || "desc").toLowerCase() === "asc" ? 1 : -1;
+
+//     const sortConfig = { [sortField]: sortOrder };
+
+//     // ==========================
+//     // 🗂️ Ambil Data dari DB
+//     // ==========================
+//     const [tasks, totalCount] = await Promise.all([
+//       Task.find(query)
+//         .sort(sortConfig)
+//         .skip(skip)
+//         .limit(limitNum)
+//         .select({
+//           _id: 1,
+//           title: 1,
+//           createdAt: 1,
+//           currentStage: 1,
+//           approvals: 1,
+//           isCompleted: 1,
+//           "mainData.nop": 1,
+//           "mainData.nopel": 1,
+//           "mainData.newName": 1,
+//           "mainData.oldName": 1,
+//           "mainData.address": 1,
+//           additionalData: 1,
+//         })
+//         .lean(),
+//       Task.countDocuments(query),
+//     ]);
+
+//     // ==========================
+//     // 🧾 Format Data & Filter Overall Status
+//     // ==========================
+//     const formattedTasks = tasks.map((task) => {
+//       const hasRejection = task.approvals?.some((a) => a.status === "rejected");
+//       const isFinished =
+//         task.currentStage === "selesai" || task.isCompleted === true;
+
+//       let status = "Diproses";
+//       if (hasRejection) status = "Ditolak";
+//       else if (isFinished) status = "Selesai";
+
+//       // --- 🔐 Tentukan akses berdasarkan role dan currentStage
+//       let isAccessible = false;
+
+//       // Contoh aturan:
+//       if (isAdmin) {
+//         isAccessible = true; // Admin bisa akses semua
+//       } else if (role === "penata" && task.currentStage === "ditata") {
+//         isAccessible = true;
+//       } else if (role === "peneliti" && task.currentStage === "diteliti") {
+//         isAccessible = true;
+//       } else if (role === "pengarsip" && task.currentStage === "diarsipkan") {
+//         isAccessible = true;
+//       } else if (role === "pengirim" && task.currentStage === "dikirim") {
+//         isAccessible = true;
+//       } else if (role === "pengecek" && task.currentStage === "selesai") {
+//         isAccessible = true;
+//       }
+
+//       return {
+//         id: task._id,
+//         title: task.title,
+//         nopel: task.mainData?.nopel,
+//         nop: task.mainData?.nop,
+//         newName: task.mainData?.newName,
+//         oldName: task.mainData?.oldName,
+//         address: task.mainData?.address,
+//         currentStage: task.currentStage,
+//         status, // overallStatus
+//         createdAt: task.createdAt,
+//         approvals: task.approvals,
+//         additionalData: task.additionalData || null,
+//         // 🧠 Tambahkan flag akses
+//         isAccessible,
+//       };
+//     });
+
+//     // --- Filter berdasarkan overallStatus setelah mapping
+//     const filteredByStatus = overallStatus
+//       ? formattedTasks.filter(
+//           (t) => t.status.toLowerCase() === String(overallStatus).toLowerCase(),
+//         )
+//       : formattedTasks;
+
+//     // ==========================
+//     // 📦 Kirim Respons
+//     // ==========================
+//     return res.status(200).json({
+//       page: pageNum,
+//       limit: limitNum,
+//       total: totalCount,
+//       sortBy: sortField,
+//       order: sortOrder === 1 ? "asc" : "desc",
+//       userRole: role,
+//       tasks: filteredByStatus,
+//     });
+//   } catch (error) {
+//     console.error("Error saat mengambil berkas permohonan:", error.message);
+//     return res.status(500).json({
+//       message: "Terjadi kesalahan saat mengambil berkas permohonan.",
+//       error: process.env.NODE_ENV === "development" ? error.message : undefined,
+//     });
+//   }
+// };
 
 // @Deskripsi: Mengambil 1 task berdasarkan ID (untuk halaman publik)
 // @Route: GET /api/tasks/:id
@@ -1170,7 +1456,7 @@ const getTaskById = async (req, res) => {
 
     // 4️⃣ Deteksi apakah ada stage yang berstatus rejected
     const rejectedApproval = task.approvals.find(
-      (approval) => approval?.status === "rejected"
+      (approval) => approval?.status === "rejected",
     );
 
     // 5️⃣ Hindari cache data sensitif
@@ -1217,7 +1503,7 @@ const getAllUserPerformance = async (req, res) => {
     // Ambil semua task beserta approval dan user yang menyetujui
     const tasks = await Task.find({})
       .select(
-        "title approvals.createdAt approvals.updatedAt approvals.approvedAt approvals.stage approvals.status approvals.approverId"
+        "title approvals.createdAt approvals.updatedAt approvals.approvedAt approvals.stage approvals.status approvals.approverId",
       )
       .populate("approvals.approverId", "name role")
       .lean();

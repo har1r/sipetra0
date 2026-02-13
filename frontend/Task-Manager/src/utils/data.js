@@ -1,14 +1,12 @@
-// src/utils/data.js
 import {
   LuLayoutDashboard,
   LuUsers,
   LuClipboardCheck,
   LuSquarePlus,
-  LuLogOut,
 } from "react-icons/lu";
 import { RiFolderHistoryLine } from "react-icons/ri";
 
-// ==== Konstanta role & default route per role ====
+// 1. Roles Definition
 export const ROLE = {
   ADMIN: "admin",
   PENGINPUT: "penginput",
@@ -19,115 +17,94 @@ export const ROLE = {
   PENGECEK: "pengecek",
 };
 
+// 2. Default Routes
 export const DEFAULT_ROUTE_BY_ROLE = {
   [ROLE.ADMIN]: "/admin/dashboard",
-  [ROLE.PENGINPUT]: "/user/dashboard",
-  [ROLE.PENATA]: "/user/dashboard",
-  [ROLE.PENELITI]: "/user/dashboard",
-  [ROLE.PENGARSIP]: "/user/dashboard",
-  [ROLE.PENGIRIM]: "/user/dashboard",
-  [ROLE.PENGECEK]: "/user/dashboard",
+  // Gunakan pemetaan default untuk semua role non-admin
+  ...Object.fromEntries(
+    Object.values(ROLE)
+      .filter((r) => r !== ROLE.ADMIN)
+      .map((r) => [r, "/user/dashboard"]),
+  ),
 };
 
-/**
- * Catatan: properti `match` dipakai untuk menandai item aktif
- * saat berada di rute turunan (startsWith).
- */
-
-export const ADMIN_MENU = Object.freeze([
-  Object.freeze({
+// 3. Menu Registry (Master Data untuk Menu)
+// Kita buat registry supaya tidak menulis ulang object yang sama berkali-kali
+const MENU_ITEMS = {
+  DASHBOARD_ADMIN: {
     id: "01",
     label: "Dashboard",
     icon: LuLayoutDashboard,
     path: "/admin/dashboard",
     match: ["/admin/dashboard"],
-  }),
-  Object.freeze({
-    id: "02",
-    label: "Kelola Permohonan",
-    icon: LuClipboardCheck,
-    path: "/manage-task/task",
-    match: ["/manage-task/task"],
-  }),
-  Object.freeze({
-    id: "03",
-    label: "Buat Permohonan",
-    icon: LuSquarePlus,
-    path: "/task/create",
-    match: ["/task/create"],
-  }),
-  Object.freeze({
-    id: "04",
-    label: "Performa Tim",
-    icon: LuUsers,
-    path: "/admin/team-performance",
-    match: ["/admin/team-performance"],
-  }),
-  Object.freeze({
-    id: "05",
-    label: "Riwayat Pengantar",
-    icon: RiFolderHistoryLine,
-    path: "/document/recommendation-latter",
-    match: ["/document/recommendation-latter"],
-  }),
-  Object.freeze({
-    id: "06",
-    label: "Logout",
-    icon: LuLogOut,
-    path: "logout",
-  }),
-]);
-
-export const USER_MENU = Object.freeze([
-  Object.freeze({
+  },
+  DASHBOARD_USER: {
     id: "01",
     label: "Dashboard",
     icon: LuLayoutDashboard,
     path: "/user/dashboard",
     match: ["/user/dashboard"],
-  }),
-  Object.freeze({
+  },
+  MANAGE_TASK: {
     id: "02",
     label: "Kelola Permohonan",
     icon: LuClipboardCheck,
     path: "/manage-task/task",
     match: ["/manage-task/task"],
-  }),
-  Object.freeze({
+  },
+  CREATE_TASK: {
     id: "03",
     label: "Buat Permohonan",
     icon: LuSquarePlus,
     path: "/task/create",
     match: ["/task/create"],
-  }),
-  Object.freeze({
+  },
+  TEAM_PERFORMANCE: {
     id: "04",
+    label: "Performa Tim",
+    icon: LuUsers,
+    path: "/admin/team-performance",
+    match: ["/admin/team-performance"],
+  },
+  HISTORY: {
+    id: "05",
     label: "Riwayat Pengantar",
     icon: RiFolderHistoryLine,
     path: "/document/recommendation-latter",
     match: ["/document/recommendation-latter"],
-  }),
-  Object.freeze({
-    id: "05",
-    label: "Logout",
-    icon: LuLogOut,
-    path: "logout",
-  }),
+  },
+};
+
+// 4. Export Final Menus (Frozen)
+export const ADMIN_MENU = Object.freeze([
+  MENU_ITEMS.DASHBOARD_ADMIN,
+  MENU_ITEMS.MANAGE_TASK,
+  MENU_ITEMS.CREATE_TASK,
+  MENU_ITEMS.TEAM_PERFORMANCE,
+  MENU_ITEMS.HISTORY,
 ]);
 
-export const SUBDISTRICT_OPTIONS = [
-  { label: "Kosambi", value: "Kosambi" },
-  { label: "Sepatan", value: "Sepatan" },
-  { label: "Sepatan Timur", value: "Sepatan Timur" },
-  { label: "Pakuhaji", value: "Pakuhaji" },
-  { label: "Teluknaga", value: "Teluknaga" },
-];
+export const USER_MENU = Object.freeze([
+  MENU_ITEMS.DASHBOARD_USER,
+  MENU_ITEMS.MANAGE_TASK,
+  MENU_ITEMS.CREATE_TASK,
+  MENU_ITEMS.HISTORY,
+]);
 
-export const TITLE_OPTIONS = [
-  { label: "Pengaktifan", value: "Pengaktifan" },
-  { label: "Mutasi Habis Update", value: "Mutasi Habis Update" },
-  { label: "Mutasi Habis Reguler", value: "Mutasi Habis Reguler" },
-  { label: "Mutasi Sebagian", value: "Mutasi Sebagian" },
-  { label: "Pembetulan", value: "Pembetulan" },
-  { label: "Objek Pajak Baru", value: "Objek Pajak Baru" },
-];
+// 5. Options Data (Dibuat lebih deskriptif)
+export const SUBDISTRICT_OPTIONS = Object.freeze(
+  ["Kosambi", "Sepatan", "Sepatan Timur", "Pakuhaji", "Teluknaga"].map(
+    (val) => ({ label: val, value: val }),
+  ),
+);
+
+export const TITLE_OPTIONS = Object.freeze(
+  [
+    "Pengaktifan",
+    "Mutasi Habis Update",
+    "Mutasi Habis Reguler",
+    "Mutasi Sebagian",
+    "Pembetulan",
+    "Objek Pajak Baru",
+  ].map((val) => ({ label: val, value: val })),
+);

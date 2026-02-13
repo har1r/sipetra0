@@ -137,7 +137,7 @@ const UserDashboard = () => {
   // ======================================
   return (
     <DashboardLayout activeMenu="Dashboard">
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-white pb-12">
+      <div className="min-h-screen ">
         {/* Header */}
         <header className="my-6 px-3 md:px-0">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
