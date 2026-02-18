@@ -6,10 +6,10 @@ import {
   FaRegUser,
   FaMapMarkerAlt,
   FaHome,
-  FaBuilding,
+  FaDatabase,
   FaFileSignature,
   FaRegStickyNote,
-  FaMap
+  FaMap,
 } from "react-icons/fa";
 import { FaClipboardList, FaPlus } from "react-icons/fa6";
 import { HiOutlineX } from "react-icons/hi";
@@ -47,7 +47,7 @@ const CreateTask = () => {
       oldlandWide: "",
       oldbuildingWide: "",
     },
-    globalNote: ""
+    globalNote: "",
   });
 
   const [additionalData, setAdditionalData] = useState([
@@ -107,12 +107,17 @@ const CreateTask = () => {
   };
 
   // --- UX Improvement: Real-time calculation ---
-  const totalLandAllocated = useMemo(() => {
-    return additionalData.reduce(
+  const landStats = useMemo(() => {
+    const totalAllocated = additionalData.reduce(
       (sum, item) => sum + toNumber(item.landWide),
       0,
     );
-  }, [additionalData]);
+
+    const limit = toNumber(formData.mainData.oldlandWide);
+    const remaining = limit - totalAllocated;
+
+    return { totalAllocated, remaining, limit };
+  }, [additionalData, formData.mainData.oldlandWide]);
 
   // Global Logic Variable (Re-computed setiap kali formData.title berubah)
   const isPengaktifan = formData.title.toLowerCase().includes("pengaktifan");
@@ -222,8 +227,6 @@ const CreateTask = () => {
               : toUpper(formData.mainData.nopel),
           oldName: toTitle(formData.mainData.oldName),
           address: toTitle(formData.mainData.address),
-          // toNumber memastikan string "" atau "-" dikirim sebagai angka jika memungkinkan,
-          // atau 0 jika memang diinput 0
           oldlandWide: toNumber(formData.mainData.oldlandWide),
           oldbuildingWide: toNumber(formData.mainData.oldbuildingWide),
         },
@@ -286,7 +289,7 @@ const CreateTask = () => {
             <header className="mb-8 flex items-center justify-between">
               <div>
                 <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
-                  <FaClipboardList className="text-emerald-600" /> Buat
+                  <FaClipboardList className="text-emerald-600" /> Daftarkan
                   Permohonan
                 </h2>
                 <div className="h-1.5 w-12 bg-emerald-500 rounded-full mt-2" />
@@ -318,7 +321,7 @@ const CreateTask = () => {
               <section className="space-y-4">
                 <h3 className="font-bold text-slate-700 flex items-center gap-2 border-b border-slate-100 pb-2">
                   <span className="p-1.5 bg-emerald-100 text-emerald-600 rounded-lg">
-                    <FaHome size={14} />
+                    <FaDatabase size={14} />
                   </span>
                   Data Utama Objek Pajak
                 </h3>
@@ -328,13 +331,13 @@ const CreateTask = () => {
                     name="nopel"
                     label={
                       isPengaktifan
-                        ? "NOPEL Otomatis (Sistem)"
-                        : "No. Pelayanan (NOPEL)"
+                        ? "No. Pelayanan Otomatis (Sistem)"
+                        : "No. Pelayanan"
                     }
                     // Jika pengaktifan, tampilkan teks placeholder sistem agar user tidak bingung
                     value={
                       isPengaktifan
-                        ? "DIBUAT OTOMATIS"
+                        ? "Dibuat Otomatis"
                         : formData.mainData.nopel
                     }
                     onChange={handleMainChange}
@@ -407,17 +410,29 @@ const CreateTask = () => {
                 <div className="flex justify-between items-end border-b border-slate-100 pb-2">
                   <h3 className="font-bold text-slate-700 flex items-center gap-2">
                     <span className="p-1.5 bg-blue-100 text-blue-600 rounded-lg">
-                      <FaBuilding size={14} />
+                      <FaDatabase size={14} />
                     </span>
-                    Rincian Pecahan
+                    Data Tambahan Objek Pajak
                   </h3>
                   {toNumber(formData.mainData.oldlandWide) > 0 && (
-                    <span
-                      className={`text-[10px] font-bold px-2 py-1 rounded-md ${totalLandAllocated > toNumber(formData.mainData.oldlandWide) ? "bg-red-100 text-red-600" : "bg-slate-100 text-slate-500"}`}
-                    >
-                      Terpakai: {totalLandAllocated} /{" "}
-                      {formData.mainData.oldlandWide} m²
-                    </span>
+                    <div className="flex gap-2">
+                      {/* Indikator Terpakai */}
+                      <span className="text-[10px] font-bold px-2 py-1 rounded-md bg-slate-100 text-slate-600">
+                        Terpakai: {landStats.totalAllocated} / {landStats.limit}{" "}
+                        m²
+                      </span>
+
+                      {/* Indikator Sisa (Bisa Negatif) */}
+                      <span
+                        className={`text-[10px] font-bold px-2 py-1 rounded-md ${
+                          landStats.remaining < 0
+                            ? "bg-red-100 text-red-600"
+                            : "bg-emerald-100 text-emerald-600"
+                        }`}
+                      >
+                        Sisa: {landStats.remaining} m²
+                      </span>
+                    </div>
                   )}
                 </div>
 
@@ -481,33 +496,74 @@ const CreateTask = () => {
 
         {/* Sidebar Guide */}
         <aside className="lg:col-span-1">
-          <div className="bg-slate-900 text-white p-7 rounded-[2.5rem] sticky top-24 shadow-2xl">
+          <div className="bg-slate-900 text-white p-7 rounded-[2.5rem] sticky top-24 shadow-2xl border border-slate-800">
             <h4 className="font-bold mb-6 flex items-center gap-2 text-emerald-400">
-              <span className="w-2 h-2 bg-emerald-400 rounded-full" /> Petunjuk
+              <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
+              Panduan Pengisian
             </h4>
-            <ul className="text-xs space-y-6 opacity-90">
+
+            {isPengaktifan && (
+              <div className="mb-6 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl text-[10px] text-emerald-400 leading-relaxed animate-in fade-in slide-in-from-top-2 duration-300">
+                <p className="font-bold mb-1 italic">
+                  ✨ Mode Pengaktifan Aktif
+                </p>
+                Sistem akan menonaktifkan input NOPEL dan membuat nomor otomatis
+                setelah data disimpan.
+              </div>
+            )}
+
+            <ul className="text-[11px] space-y-6 opacity-90 leading-relaxed">
+              {/* Poin 1: NOPEL Logic */}
               <li className="flex gap-3">
                 <b className="text-emerald-400">01.</b>
                 <p>
-                  <b>NOPEL</b> bersifat unik. Sistem akan menolak jika NOPEL
-                  sudah terdaftar sebelumnya.
+                  <b className="text-white">Sistem Penomoran:</b> Untuk jenis{" "}
+                  <b>Pengaktifan</b>, NOPEL akan dibuat otomatis oleh sistem.
+                  Untuk jenis lain, pastikan NOPEL belum pernah terdaftar.
                 </p>
               </li>
+
+              {/* Poin 2: Land Calculation */}
               <li className="flex gap-3">
                 <b className="text-emerald-400">02.</b>
                 <p>
-                  Tahapan <b>diinput</b> akan otomatis disetujui oleh sistem
-                  setelah Anda menekan tombol simpan.
+                  <b className="text-white">Alokasi Lahan:</b> Pantau indikator{" "}
+                  <span className="text-emerald-400 font-bold">Sisa Tanah</span>
+                  . Sistem mengizinkan nilai <b>negatif</b>, namun pastikan data
+                  sesuai dengan sertifikat pecahan.
                 </p>
               </li>
+
+              {/* Poin 3: Dynamic Rows */}
               <li className="flex gap-3">
                 <b className="text-emerald-400">03.</b>
                 <p>
-                  Jika jenisnya <b>Pengaktifan</b>, sistem akan melompati
-                  beberapa tahap verifikasi secara otomatis.
+                  <b className="text-white">Data Pecahan:</b> Anda dapat
+                  menambahkan lebih dari satu objek pecahan. Pastikan setiap
+                  baris memiliki <b>Nama Baru</b> dan <b>No. Sertifikat</b> yang
+                  valid.
+                </p>
+              </li>
+
+              {/* Poin 4: Auto Approval */}
+              <li className="flex gap-3">
+                <b className="text-emerald-400">04.</b>
+                <p>
+                  <b className="text-white">Otomatisasi:</b> Berkas yang
+                  didaftarkan akan langsung masuk ke tahap{" "}
+                  <i className="text-slate-400">In Progress</i> dan siap untuk
+                  proses verifikasi lanjutan.
                 </p>
               </li>
             </ul>
+
+            {/* Info Tambahan */}
+            <div className="mt-8 pt-6 border-t border-slate-800">
+              <div className="flex items-center gap-2 text-[10px] text-slate-400">
+                <div className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                <span>Wajib diisi</span>
+              </div>
+            </div>
           </div>
         </aside>
       </div>
@@ -516,7 +572,14 @@ const CreateTask = () => {
 };
 
 // --- Sub-Components (Optimized) ---
-const InputField = ({ icon: Icon, label, error, as = "input", disabled, ...props }) => (
+const InputField = ({
+  icon: Icon,
+  label,
+  error,
+  as = "input",
+  disabled,
+  ...props
+}) => (
   <div className="w-full space-y-1">
     <div className="relative group">
       {Icon && (
@@ -530,11 +593,12 @@ const InputField = ({ icon: Icon, label, error, as = "input", disabled, ...props
         <textarea
           disabled={disabled}
           className={`w-full pl-11 pr-4 py-3.5 border rounded-2xl outline-none transition-all text-sm min-h-[100px] 
-            ${disabled 
-              ? "bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed" 
-              : error 
-                ? "border-red-500 bg-red-50 focus:ring-4 focus:ring-red-500/10 focus:border-red-500" 
-                : "bg-slate-50 border-slate-200 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500"
+            ${
+              disabled
+                ? "bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed"
+                : error
+                  ? "border-red-500 bg-red-50 focus:ring-4 focus:ring-red-500/10 focus:border-red-500"
+                  : "bg-slate-50 border-slate-200 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500"
             }`}
           placeholder={label}
           {...props}
@@ -543,11 +607,12 @@ const InputField = ({ icon: Icon, label, error, as = "input", disabled, ...props
         <input
           disabled={disabled}
           className={`w-full pl-11 pr-4 py-3 border rounded-2xl outline-none transition-all text-sm
-            ${disabled 
-              ? "bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed font-medium" 
-              : error 
-                ? "border-red-500 bg-red-50 focus:ring-4 focus:ring-red-500/10 focus:border-red-500" 
-                : "bg-slate-50 border-slate-200 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500"
+            ${
+              disabled
+                ? "bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed font-medium"
+                : error
+                  ? "border-red-500 bg-red-50 focus:ring-4 focus:ring-red-500/10 focus:border-red-500"
+                  : "bg-slate-50 border-slate-200 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500"
             }`}
           placeholder={label}
           {...props}

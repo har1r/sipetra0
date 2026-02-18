@@ -20,8 +20,8 @@ export const API_PATHS = {
     GET_ALL_TASKS: "/api/tasks",
     CREATE_TASK: "/api/tasks",
     GET_TASK_BY_ID: (taskId) => `/api/tasks/${taskId}`,
-    APPROVE_TASK: (taskId) => `/api/tasks/approve/${taskId}`,
-    UPDATE_TASK: (taskId) => `/api/tasks/update/${taskId}`,
+    APPROVE_TASK: (taskId) => `/api/tasks/${taskId}/approve`,
+    UPDATE_TASK: (taskId) => `/api/tasks/${taskId}`,
     DELETE_TASK: (taskId) => `/api/tasks/${taskId}`,
     TEAM_PERFORMANCE: "/api/tasks/user-performance",
   },
@@ -31,6 +31,5 @@ export const API_PATHS = {
     EXPORTED_REPORTS: "/api/reports/exported-reports",
     UPLOAD_LINK_TASK: (taskId) => `/api/reports/add-attachment/${taskId}`,
     UPLOAD_BATCH_LINK: (reportId) => `/api/reports/attachment/${reportId}`,
-
   },
 };

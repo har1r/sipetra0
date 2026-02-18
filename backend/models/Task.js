@@ -72,7 +72,7 @@ const taskSchema = new mongoose.Schema(
         "Mutasi Habis Reguler",
         "Mutasi Sebagian",
         "Pembetulan",
-        "Objek Pajak Baru"
+        "Objek Pajak Baru",
       ],
       required: true,
     },
@@ -111,6 +111,12 @@ const taskSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
+    },
+    // --- TAMBAHKAN DI SINI ---
+    reportId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Report",
+      default: null,
     },
     globalNote: { type: String, trim: true, default: "" },
     revisedHistory: {

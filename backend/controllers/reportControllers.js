@@ -4,9 +4,7 @@ const Task = require("../models/Task");
 const { createBatchReport } = require("../services/createBatchReport"); // Gunakan fungsi baru
 const path = require("path");
 const LOGO_PATH = path.resolve(__dirname, "./assets/logo-kab.png");
-const Report = mongoose.model("Report"); // Pastikan model Report sudah terdaftar
 
-const { uploadToDrive } = require("../utils/googleDrive"); // Import helper Drive
 const fs = require("fs");
 
 const fmtDateID = (d = new Date()) =>
@@ -41,7 +39,8 @@ const exportReport = async (req, res) => {
     const uniqueTitles = [...new Set(titles)];
     if (uniqueTitles.length > 1) {
       return res.status(400).json({
-        message: "Hanya task dengan title yang sama yang bisa di-print bersamaan.",
+        message:
+          "Hanya task dengan title yang sama yang bisa di-print bersamaan.",
       });
     }
 
@@ -57,7 +56,7 @@ const exportReport = async (req, res) => {
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
       "Content-Disposition",
-      `attachment; filename=surat_pengantar_${nomor}.pdf`
+      `attachment; filename=surat_pengantar_${nomor}.pdf`,
     );
     doc.pipe(res);
 
@@ -67,9 +66,14 @@ const exportReport = async (req, res) => {
     doc.font("Helvetica").fontSize(11);
     doc.text("PEMERINTAH KABUPATEN TANGERANG", { align: "center" });
     doc.text("BADAN PENDAPATAN DAERAH", { align: "center" });
-    doc.text("Gedung Pendapatan Daerah Komp. Perkantoran Tigaraksa", { align: "center" });
+    doc.text("Gedung Pendapatan Daerah Komp. Perkantoran Tigaraksa", {
+      align: "center",
+    });
     doc.text("Telp. (021) 599 88333 Fax. (021) 599 88333", { align: "center" });
-    doc.text("Website: bapendatangerangkab.go.id Email : bapenda@tangerangkab.go.id", { align: "center" });
+    doc.text(
+      "Website: bapendatangerangkab.go.id Email : bapenda@tangerangkab.go.id",
+      { align: "center" },
+    );
 
     try {
       const topY = doc.page.margins.top;
@@ -81,14 +85,24 @@ const exportReport = async (req, res) => {
     } catch (e) {}
 
     const lineY = doc.y + 5;
-    doc.moveTo(doc.page.margins.left, lineY).lineTo(doc.page.width - doc.page.margins.right, lineY).lineWidth(2).stroke();
+    doc
+      .moveTo(doc.page.margins.left, lineY)
+      .lineTo(doc.page.width - doc.page.margins.right, lineY)
+      .lineWidth(2)
+      .stroke();
     doc.moveDown(2);
 
-    const contentWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
+    const contentWidth =
+      doc.page.width - doc.page.margins.left - doc.page.margins.right;
     const startY = doc.y;
 
-    doc.text(`Nomor     : ${nomorPengantar}`, doc.page.margins.left, startY, { align: "left" });
-    doc.text(`Tigaraksa, ${tanggal}`, doc.page.margins.left, startY, { width: contentWidth, align: "right" });
+    doc.text(`Nomor     : ${nomorPengantar}`, doc.page.margins.left, startY, {
+      align: "left",
+    });
+    doc.text(`Tigaraksa, ${tanggal}`, doc.page.margins.left, startY, {
+      width: contentWidth,
+      align: "right",
+    });
     doc.moveDown(1);
 
     let totalBerkas = 0;
@@ -97,18 +111,22 @@ const exportReport = async (req, res) => {
     });
 
     doc.text(`Lampiran : ${totalBerkas} Berkas`);
-    doc.text(`Hal           : Rekomendasi Permohonan ${jenisPelayanan} SPPT Tahun ${new Date().getFullYear()}`);
+    doc.text(
+      `Hal           : Rekomendasi Permohonan ${jenisPelayanan} SPPT Tahun ${new Date().getFullYear()}`,
+    );
     doc.moveDown(1);
 
     doc.text("Yth. Kepala Badan Pendapatan Daerah");
-    doc.text("Cq. Kepala Bidang Pendataan, Penilaian, dan Penetapan Pajak Daerah");
+    doc.text(
+      "Cq. Kepala Bidang Pendataan, Penilaian, dan Penetapan Pajak Daerah",
+    );
     doc.text("di");
     doc.text("Tempat");
     doc.moveDown(1);
 
     doc.text(
       `Dipermaklumkan dengan hormat, bersama ini kami sampaikan data permohonan ${jenisPelayanan} SPPT PBB Tahun ${new Date().getFullYear()} pada pelayanan tatap muka UPTD Wilayah IV sebagai berikut:`,
-      { align: "justify" }
+      { align: "justify" },
     );
     doc.moveDown(1);
 
@@ -116,7 +134,12 @@ const exportReport = async (req, res) => {
     const tableStartX = doc.x;
     let tableY = doc.y;
     const ringkasHeaders = ["NO AGENDA", "JENIS", "JUMLAH", "KETERANGAN"];
-    const ringkasValues = [String(nomor), jenisPelayanan, `${totalBerkas} Berkas`, "Rincian Berkas Terlampir"];
+    const ringkasValues = [
+      String(nomor),
+      jenisPelayanan,
+      `${totalBerkas} Berkas`,
+      "Rincian Berkas Terlampir",
+    ];
     const ringkasWidths = [90, 140, 100, 165];
     const rowHeight = 25;
 
@@ -124,7 +147,10 @@ const exportReport = async (req, res) => {
     ringkasHeaders.forEach((header, i) => {
       const w = ringkasWidths[i];
       doc.rect(x, tableY, w, rowHeight).stroke();
-      doc.font("Helvetica-Bold").fontSize(9).text(header, x + 4, tableY + 8, { width: w - 8, align: "center" });
+      doc
+        .font("Helvetica-Bold")
+        .fontSize(9)
+        .text(header, x + 4, tableY + 8, { width: w - 8, align: "center" });
       x += w;
     });
     tableY += rowHeight;
@@ -133,7 +159,10 @@ const exportReport = async (req, res) => {
     ringkasValues.forEach((val, i) => {
       const w = ringkasWidths[i];
       doc.rect(x, tableY, w, rowHeight).stroke();
-      doc.font("Helvetica").fontSize(9).text(val, x + 4, tableY + 8, { width: w - 8, align: "center" });
+      doc
+        .font("Helvetica")
+        .fontSize(9)
+        .text(val, x + 4, tableY + 8, { width: w - 8, align: "center" });
       x += w;
     });
 
@@ -143,21 +172,36 @@ const exportReport = async (req, res) => {
     doc.font("Helvetica").fontSize(11);
     doc.text(
       `Sehubungan dengan hal ini, bahwa berkas permohonan ${jenisPelayanan} SPPT PBB tersebut sudah melalui proses penelitian/verifikasi dan diarsipkan sebagaimana mestinya (data terlampir).`,
-      { align: "justify" }
+      { align: "justify" },
     );
     doc.moveDown(2);
-    doc.text("Demikian surat rekomendasi ini kami sampaikan, atas perhatiannya diucapkan terimakasih.", { align: "justify" });
+    doc.text(
+      "Demikian surat rekomendasi ini kami sampaikan, atas perhatiannya diucapkan terimakasih.",
+      { align: "justify" },
+    );
     doc.moveDown(2);
 
-    const footerX = doc.page.margins.left + (contentWidth / 2) + 40;
+    const footerX = doc.page.margins.left + contentWidth / 2 + 40;
     const footerWidth1 = contentWidth / 2;
     doc.moveDown(4);
     doc.font("Helvetica").fontSize(10);
-    doc.text("Kepala UPTD", footerX, doc.y, { width: footerWidth1, align: "center" });
-    doc.text("Pajak Daerah Wilayah IV", footerX, doc.y, { width: footerWidth1, align: "center" });
+    doc.text("Kepala UPTD", footerX, doc.y, {
+      width: footerWidth1,
+      align: "center",
+    });
+    doc.text("Pajak Daerah Wilayah IV", footerX, doc.y, {
+      width: footerWidth1,
+      align: "center",
+    });
     doc.moveDown(5);
-    doc.text("ASEP SUANDI, SH., M.Si", footerX, doc.y, { width: footerWidth1, align: "center" });
-    doc.text("NIP. 19800630 200801 1 006", footerX, doc.y, { width: footerWidth1, align: "center" });
+    doc.text("ASEP SUANDI, SH., M.Si", footerX, doc.y, {
+      width: footerWidth1,
+      align: "center",
+    });
+    doc.text("NIP. 19800630 200801 1 006", footerX, doc.y, {
+      width: footerWidth1,
+      align: "center",
+    });
 
     // =======================================================
     // PAGE 2 : Tabel Rincian Task (Landscape)
@@ -194,17 +238,41 @@ const exportReport = async (req, res) => {
     const startX2 = doc.x;
     let y = doc.y;
     const colWidths = [25, 55, 100, 75, 75, 135, 65, 65, 70, 40, 40, 80];
-    const headers = ["NO", "NOPEL", "NOP", "NAMA PEMOHON", "NAMA SPPT", "ALAMAT OP", "DESA", "KECAMATAN", "JENIS", "LT", "LB", "BUKTI"];
+    const headers = [
+      "NO",
+      "NOPEL",
+      "NOP",
+      "NAMA PEMOHON",
+      "NAMA SPPT",
+      "ALAMAT OP",
+      "DESA",
+      "KECAMATAN",
+      "JENIS",
+      "LT",
+      "LB",
+      "BUKTI",
+    ];
 
     function drawRow(row, yRow, isHeader = false) {
       let xRow = startX2;
-      const heights = row.map((text, i) => doc.heightOfString(String(text), { width: colWidths[i] - 4, lineBreak: !isHeader }) + 8);
+      const heights = row.map(
+        (text, i) =>
+          doc.heightOfString(String(text), {
+            width: colWidths[i] - 4,
+            lineBreak: !isHeader,
+          }) + 8,
+      );
       const rowHeightLocal = isHeader ? 20 : Math.max(...heights);
       row.forEach((text, i) => {
         const width = colWidths[i];
         doc.rect(xRow, yRow, width, rowHeightLocal).stroke();
-        doc.font(isHeader ? "Helvetica-Bold" : "Helvetica").fontSize(isHeader ? 8 : 7);
-        doc.text(String(text), xRow + 2, yRow + 7, { width: width - 4, align: isHeader ? "center" : "left" });
+        doc
+          .font(isHeader ? "Helvetica-Bold" : "Helvetica")
+          .fontSize(isHeader ? 8 : 7);
+        doc.text(String(text), xRow + 2, yRow + 7, {
+          width: width - 4,
+          align: isHeader ? "center" : "left",
+        });
         xRow += width;
       });
       return rowHeightLocal;
@@ -232,10 +300,19 @@ const exportReport = async (req, res) => {
     doc.y = footerY;
     doc.font("Helvetica").fontSize(10);
     doc.text("Kepala UPTD", x2, doc.y, { width: footerWidth, align: "center" });
-    doc.text("Pajak Daerah Wilayah IV", x2, doc.y, { width: footerWidth, align: "center" });
+    doc.text("Pajak Daerah Wilayah IV", x2, doc.y, {
+      width: footerWidth,
+      align: "center",
+    });
     doc.moveDown(5);
-    doc.text("ASEP SUANDI, SH., M.Si", x2, doc.y, { width: footerWidth, align: "center" });
-    doc.text("NIP. 19800630 200801 1 006", x2, doc.y, { width: footerWidth, align: "center" });
+    doc.text("ASEP SUANDI, SH., M.Si", x2, doc.y, {
+      width: footerWidth,
+      align: "center",
+    });
+    doc.text("NIP. 19800630 200801 1 006", x2, doc.y, {
+      width: footerWidth,
+      align: "center",
+    });
 
     doc.end();
   } catch (error) {
@@ -247,34 +324,67 @@ const exportReport = async (req, res) => {
 // @Deskripsi: Menampilkan datar surat pengantar/rekomendasi
 // @Route: GET /api/reports/daftar-surat-pengantar
 // @Access: Private (semua user role dan admin)
-const getDaftarSuratPengantar = async (req, res) => {
+const getVerifiedTasksForExport = async (req, res) => {
   try {
-    // KITA HAPUS bagian pencarian reportedTasks agar semua data muncul
-    
+    // 1. Ambil query parameter untuk pagination dan pencarian
+    // Default page = 1, limit = 10
+    const page = parseInt(req.query.page) || 1;
+    const limit = 10;
+    const skip = (page - 1) * limit;
+    const { nopel } = req.query;
+
     const filters = {
-      // Gunakan currentStage sebagai indikator utama bahwa task sudah lewat tahap 'diteliti'
-      currentStage: { 
-        $in: ["diarsipkan", "dikirim", "diperiksa", "selesai"] 
-      }
+      // Hanya ambil stage yang sudah melewati 'diteliti'
+      currentStage: {
+        $in: ["diarsipkan", "dikirim", "diperiksa", "selesai"],
+      },
     };
 
-    // Filter pencarian berdasarkan NOPEL jika ada
-    if (req.query.nopel) {
-      filters["mainData.nopel"] = new RegExp(req.query.nopel.trim(), "i");
+    if (nopel) {
+      filters["mainData.nopel"] = new RegExp(nopel.trim(), "i");
     }
 
+    // 2. Hitung total data untuk keperluan metadata pagination
+    const totalData = await Task.countDocuments(filters);
+    const totalPages = Math.ceil(totalData / limit);
+
+    // 3. Jalankan Query dengan Pagination dan Populate
     const tasks = await Task.find(filters)
-      .sort({ updatedAt: -1 }) // Tampilkan yang terbaru di atas
-      .select("_id title mainData.nopel mainData.nop attachments currentStage updatedAt additionalData") 
+      .sort({ updatedAt: -1 }) // Urutkan terbaru
+      .skip(skip) // Lewati data halaman sebelumnya
+      .limit(limit) // Batasi hanya 10 data
+      .populate({
+        path: "reportId",
+        select: "batchId", // Ambil nomor batch saja
+      })
+      .select(
+        "_id title mainData attachments currentStage updatedAt additionalData reportId",
+      )
       .lean();
 
     return res.status(200).json({
       success: true,
-      totalData: tasks.length, // Menghitung semua yang sesuai filter stage
-      tasks
+      pagination: {
+        totalData,
+        totalPages,
+        currentPage: page,
+        limit,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+      },
+      tasks: tasks.map((t) => ({
+        ...t,
+        // Jika reportId ada hasil populate, ambil batchId-nya
+        displayBatchId: t.reportId ? t.reportId.batchId : "Belum Ada Batch",
+        mainData: {
+          ...t.mainData,
+          oldlandWide: t.mainData?.oldlandWide ?? 0,
+          oldbuildingWide: t.mainData?.oldbuildingWide ?? 0,
+        },
+      })),
     });
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    return res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -284,7 +394,9 @@ const addAttachmentToTask = async (req, res) => {
     const { fileName, driveLink } = req.body;
 
     if (!fileName || !driveLink) {
-      return res.status(400).json({ message: "Nama file dan Link Drive wajib diisi" });
+      return res
+        .status(400)
+        .json({ message: "Nama file dan Link Drive wajib diisi" });
     }
 
     const task = await Task.findByIdAndUpdate(
@@ -295,11 +407,11 @@ const addAttachmentToTask = async (req, res) => {
             fileName,
             driveLink,
             uploadedBy: req.user.id, // Diambil dari middleware auth
-            uploadedAt: new Date()
-          }
-        }
+            uploadedAt: new Date(),
+          },
+        },
       },
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     );
 
     if (!task) return res.status(404).json({ message: "Task tidak ditemukan" });
@@ -307,7 +419,7 @@ const addAttachmentToTask = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Link Google Drive berhasil ditambahkan",
-      attachments: task.attachments
+      attachments: task.attachments,
     });
   } catch (error) {
     return res.status(500).json({ message: error.message });
@@ -337,11 +449,12 @@ const getExportedReports = async (req, res) => {
       }
     }
 
-    const reports = await mongoose.model("Report")
+    const reports = await mongoose
+      .model("Report")
       .find(filters)
       .populate({
         path: "tasks",
-        select: "mainData.nopel mainData.nop title additionalData", 
+        select: "mainData.nopel mainData.nop title additionalData",
       })
       .populate("generatedBy", "name")
       .sort({ createdAt: -1 });
@@ -349,29 +462,32 @@ const getExportedReports = async (req, res) => {
     // FORMAT RESPONSE YANG DISESUAIKAN
     const formattedReports = reports.map((report) => ({
       // Gunakan _id agar konsisten dengan MongoDB dan React key
-      _id: report._id, 
+      _id: report._id,
       batchId: report.batchId,
       tanggalCetak: report.createdAt,
       admin: report.generatedBy?.name || "Sistem",
       totalTasks: report.tasks?.length || 0, // Sesuai kolom di tabel
       status: report.status,
-      
+
       // WAJIB DISERTAKAN: Agar tidak undefined saat di-update
-      driveLink: report.driveLink || "", 
-      
-      daftarNopel: report.tasks?.map(t => t.mainData?.nopel).join(", ") || "-",
+      driveLink: report.driveLink || "",
+
+      daftarNopel:
+        report.tasks?.map((t) => t.mainData?.nopel).join(", ") || "-",
       // pdfUrl tetap disertakan jika Anda masih menggunakannya
-      pdfUrl: report.pdfUrl || null 
+      pdfUrl: report.pdfUrl || null,
     }));
 
     return res.status(200).json({
       success: true,
       count: formattedReports.length,
-      reports: formattedReports
+      reports: formattedReports,
     });
   } catch (error) {
     console.error("Error Get Exported Reports:", error);
-    return res.status(500).json({ message: "Gagal memuat data laporan: " + error.message });
+    return res
+      .status(500)
+      .json({ message: "Gagal memuat data laporan: " + error.message });
   }
 };
 
@@ -382,18 +498,18 @@ const addAttachmentToReport = async (req, res) => {
 
     // Validasi input
     if (!driveLink) {
-      return res.status(400).json({ 
-        message: "Link Google Drive wajib diisi" 
+      return res.status(400).json({
+        message: "Link Google Drive wajib diisi",
       });
     }
 
     // Cari dan update driveLink pada Report
     const report = await mongoose.model("Report").findByIdAndUpdate(
       reportId,
-      { 
-        $set: { driveLink: driveLink } 
+      {
+        $set: { driveLink: driveLink },
       },
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     );
 
     if (!report) {
@@ -405,12 +521,18 @@ const addAttachmentToReport = async (req, res) => {
       message: "Link Batch Report berhasil diperbarui",
       data: {
         batchId: report.batchId,
-        driveLink: report.driveLink
-      }
+        driveLink: report.driveLink,
+      },
     });
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
 };
 
-module.exports = { exportReport, getDaftarSuratPengantar, addAttachmentToTask, getExportedReports, addAttachmentToReport };
+module.exports = {
+  exportReport,
+  getVerifiedTasksForExport,
+  addAttachmentToTask,
+  getExportedReports,
+  addAttachmentToReport,
+};

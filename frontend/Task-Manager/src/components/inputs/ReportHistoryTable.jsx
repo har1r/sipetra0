@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import axiosInstance from "../../utils/axiosInstance";
 import { API_PATHS } from "../../utils/apiPaths";
 import {
@@ -6,6 +6,9 @@ import {
   FaSearch,
   FaLink,
   FaExternalLinkAlt,
+  FaFileInvoice,
+  FaCalendarAlt,
+  FaFolderOpen,
 } from "react-icons/fa";
 import toast from "react-hot-toast";
 
@@ -14,125 +17,213 @@ const ReportHistoryTable = () => {
   const [loading, setLoading] = useState(false);
   const [filterBatch, setFilterBatch] = useState("");
 
-  const fetchReports = async () => {
+  const fetchReports = useCallback(async () => {
     setLoading(true);
     try {
       const res = await axiosInstance.get(API_PATHS.REPORTS.EXPORTED_REPORTS, {
         params: { batchId: filterBatch },
       });
-      // Pastikan menyesuaikan mapping data jika backend menggunakan id/_id
+      // Backend mengembalikan { reports: [...] }
       setReports(res.data.reports || []);
     } catch (err) {
       toast.error("Gagal mengambil riwayat laporan.");
     } finally {
       setLoading(false);
     }
-  };
+  }, [filterBatch]);
 
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
       fetchReports();
     }, 500);
     return () => clearTimeout(delayDebounceFn);
-  }, [filterBatch]);
+  }, [fetchReports]);
 
-  /* --- FUNGSI BARU: Update Link Drive untuk Batch --- */
+  /* --- Update pada fungsi handleSetBatchLink --- */
   const handleSetBatchLink = async (reportId, currentLink) => {
-    const newLink = window.prompt("Masukkan URL Google Drive untuk Batch ini:", currentLink || "");
-    
+    const newLink = window.prompt(
+      "Masukkan URL Google Drive untuk Batch ini:",
+      currentLink || "",
+    );
+
     if (newLink === null) return;
     if (newLink.trim() === "") return toast.error("Link tidak boleh kosong.");
 
     const toastId = toast.loading("Menyimpan link batch...");
     try {
-      // Menggunakan rute PUT /api/reports/attachment/:reportId
-      await axiosInstance.put(API_PATHS.REPORTS.UPLOAD_BATCH_LINK(reportId), { 
-        driveLink: newLink 
+      await axiosInstance.put(API_PATHS.REPORTS.UPLOAD_BATCH_LINK(reportId), {
+        driveLink: newLink,
       });
 
       toast.success("Link batch berhasil diperbarui!", { id: toastId });
-      fetchReports(); // Refresh data tabel
+
+      // PERBAIKAN 1: Optimistic Update (Update state lokal segera)
+      setReports((prevReports) =>
+        prevReports.map((report) =>
+          report._id === reportId ? { ...report, driveLink: newLink } : report,
+        ),
+      );
+
+      // Tetap panggil fetchReports untuk sinkronisasi data menyeluruh dengan server
+      await fetchReports();
     } catch (err) {
-      toast.error(err.response?.data?.message || "Gagal menyimpan link.", { id: toastId });
+      toast.error(err.response?.data?.message || "Gagal menyimpan link.", {
+        id: toastId,
+      });
     }
   };
 
+  /* --- Perbaikan pada useEffect --- */
+  useEffect(() => {
+    // Jika input pencarian kosong, langsung ambil data tanpa delay
+    if (!filterBatch) {
+      fetchReports();
+      return;
+    }
+
+    // Jika sedang mengetik, gunakan debounce
+    const delayDebounceFn = setTimeout(() => {
+      fetchReports();
+    }, 500);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [filterBatch, fetchReports]); // Pastikan fetchReports masuk dependency
+
   return (
-    <div className="mt-12 space-y-6">
-      <div className="flex items-center gap-3 border-b border-emerald-100 pb-4">
-        <FaHistory className="text-2xl text-emerald-600" />
-        <h2 className="text-xl font-bold text-emerald-800">
-          Riwayat Batch & Link Folder
-        </h2>
+    <div className="space-y-6">
+      {/* FILTER SECTION - Menyesuaikan style ExportSummary */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-slate-50 p-4 rounded-3xl border border-slate-200">
+        <div className="relative flex-1 max-w-md">
+          <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Cari No. Batch / Nomor Surat..."
+            className="w-full rounded-2xl border-none bg-white py-3 pl-12 pr-4 text-sm outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all shadow-sm"
+            value={filterBatch}
+            onChange={(e) => setFilterBatch(e.target.value)}
+          />
+        </div>
+        <div className="flex items-center gap-2 px-4 py-2 bg-white rounded-2xl border border-slate-200 text-[10px] font-black uppercase text-slate-500 tracking-widest">
+          <FaHistory className="text-emerald-500" />
+          Total: {reports.length} Batch
+        </div>
       </div>
 
-      <div className="flex max-w-sm relative">
-        <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-400" />
-        <input
-          type="text"
-          placeholder="Cari No. Batch..."
-          className="w-full rounded-xl border border-emerald-100 py-2 pl-10 pr-4 text-sm outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
-          value={filterBatch}
-          onChange={(e) => setFilterBatch(e.target.value)}
-        />
-      </div>
+      {/* TABLE SECTION - Glassmorphism Style */}
+      <div className="relative overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-xl shadow-slate-200/40">
+        {loading && (
+          <div className="absolute inset-0 z-30 flex items-center justify-center bg-white/80 backdrop-blur-sm">
+            <div className="h-10 w-10 animate-spin rounded-full border-4 border-emerald-500 border-t-transparent" />
+          </div>
+        )}
 
-      <div className="overflow-hidden rounded-2xl border border-emerald-100 bg-white shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="bg-slate-50 text-emerald-900 border-b border-emerald-100">
-              <tr>
-                <th className="px-6 py-4 font-bold uppercase tracking-wider">No. Batch / Surat</th>
-                <th className="px-6 py-4 font-bold uppercase tracking-wider">Tanggal</th>
-                <th className="px-6 py-4 font-bold uppercase tracking-wider">Jumlah Task</th>
-                <th className="px-6 py-4 font-bold uppercase tracking-wider text-center">Folder Drive</th>
-                <th className="px-6 py-4 font-bold uppercase tracking-wider text-center">Aksi</th>
+            <thead>
+              <tr className="bg-slate-50 text-slate-500 border-b border-slate-100">
+                <th className="px-6 py-5 font-black uppercase tracking-tighter text-[10px]">
+                  Detail Batch & Admin
+                </th>
+                <th className="px-6 py-5 font-black uppercase tracking-tighter text-[10px]">
+                  Waktu Penerbitan
+                </th>
+                <th className="px-6 py-5 font-black uppercase tracking-tighter text-[10px] text-center">
+                  Cakupan Berkas
+                </th>
+                <th className="px-6 py-5 font-black uppercase tracking-tighter text-[10px] text-center">
+                  Folder Drive
+                </th>
+                <th className="px-6 py-5 font-black uppercase tracking-tighter text-[10px] text-center">
+                  Aksi
+                </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-emerald-50">
-              {loading ? (
-                <tr>
-                  <td colSpan="5" className="p-10 text-center text-slate-400">Loading...</td>
-                </tr>
-              ) : reports.length > 0 ? (
+            <tbody className="divide-y divide-slate-100">
+              {reports.length > 0 ? (
                 reports.map((report) => (
-                  <tr key={report._id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="px-6 py-4 font-bold text-emerald-700">{report.batchId}</td>
-                    <td className="px-6 py-4 text-slate-500">
-                      {new Date(report.createdAt).toLocaleDateString("id-ID")}
+                  <tr
+                    key={report._id}
+                    className="group hover:bg-slate-50/80 transition-all"
+                  >
+                    <td className="px-6 py-5">
+                      <div className="flex flex-col">
+                        <div className="flex items-center gap-2">
+                          <FaFileInvoice className="text-emerald-500" />
+                          <span className="font-black text-slate-800 text-base tracking-tight">
+                            {report.batchId}
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-bold text-slate-400 uppercase mt-1">
+                          Oleh: {report.admin}
+                        </span>
+                      </div>
                     </td>
-                    <td className="px-6 py-4 text-center text-slate-600">
-                      <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800">
-                        {report.totalTasks} Berkas
-                      </span>
+                    <td className="px-6 py-5">
+                      <div className="flex items-center gap-2 text-slate-600 font-medium">
+                        <FaCalendarAlt className="text-slate-300 text-xs" />
+                        {new Date(report.tanggalCetak).toLocaleDateString(
+                          "id-ID",
+                          {
+                            day: "2-digit",
+                            month: "short",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          },
+                        )}
+                      </div>
                     </td>
-                    <td className="px-6 py-4 text-center">
+                    <td className="px-6 py-5 text-center">
+                      <div className="inline-flex flex-col items-center">
+                        <span className="bg-emerald-50 text-emerald-700 px-3 py-1 rounded-lg border border-emerald-100 font-black text-xs">
+                          {report.totalTasks} Berkas
+                        </span>
+                        <p className="text-[9px] text-slate-400 mt-1 max-w-[150px] truncate italic">
+                          {report.daftarNopel}
+                        </p>
+                      </div>
+                    </td>
+                    <td className="px-6 py-5 text-center">
                       {report.driveLink ? (
                         <a
                           href={report.driveLink}
                           target="_blank"
                           rel="noreferrer"
-                          className="inline-flex items-center gap-2 text-blue-600 hover:underline font-medium"
+                          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-blue-50 text-blue-600 border border-blue-100 hover:bg-blue-600 hover:text-white transition-all text-xs font-bold"
                         >
-                          <FaExternalLinkAlt className="text-[10px]" /> Buka Folder
+                          <FaFolderOpen /> Buka Folder
                         </a>
                       ) : (
-                        <span className="text-slate-300 italic">Belum ada link</span>
+                        <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest italic">
+                          Belum Terkait
+                        </span>
                       )}
                     </td>
-                    <td className="px-6 py-4 text-center">
+                    <td className="px-6 py-5 text-center">
                       <button
-                        onClick={() => handleSetBatchLink(report._id, report.driveLink)}
-                        className="inline-flex items-center gap-2 rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-1.5 text-xs font-bold text-emerald-700 hover:bg-emerald-600 hover:text-white transition-all shadow-sm"
+                        onClick={() =>
+                          handleSetBatchLink(report._id, report.driveLink)
+                        }
+                        className="p-3 rounded-xl bg-white border border-slate-200 text-slate-400 hover:text-emerald-600 hover:border-emerald-600 hover:shadow-lg transition-all"
+                        title="Tautkan Folder Drive"
                       >
-                        <FaLink /> {report.driveLink ? "Ubah Link" : "Set Link"}
+                        <FaLink size={14} />
                       </button>
                     </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan="5" className="p-10 text-center text-slate-400">Data tidak ditemukan.</td>
+                  <td colSpan="5" className="p-20 text-center">
+                    <div className="flex flex-col items-center gap-3">
+                      <div className="p-5 bg-slate-50 rounded-full text-slate-200">
+                        <FaHistory size={40} />
+                      </div>
+                      <p className="text-slate-400 font-bold">
+                        Tidak ada riwayat batch ditemukan.
+                      </p>
+                    </div>
+                  </td>
                 </tr>
               )}
             </tbody>

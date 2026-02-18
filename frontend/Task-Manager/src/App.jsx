@@ -19,22 +19,21 @@ import Login from "./pages/Auth/Login";
 import SignUp from "./pages/Auth/SignUp";
 
 // === Lazy-loaded Pages ===
-const Unauthorized = React.lazy(() =>
-  import("./pages/Unauthorized/Unauthorized")
+const Unauthorized = React.lazy(
+  () => import("./pages/Unauthorized/Unauthorized"),
 );
 const Dashboard = React.lazy(() => import("./pages/Admin/AdminDashboard"));
-const ManageTasks = React.lazy(() => import("./pages/Admin/ManageAdminTask"));
-const TeamPerformance = React.lazy(() =>
-  import("./pages/Admin/TeamPerformance")
+const TeamPerformance = React.lazy(
+  () => import("./pages/Admin/TeamPerformance"),
 );
 const CreateTask = React.lazy(() => import("./pages/Task/CreateTask"));
 const TaskDetail = React.lazy(() => import("./pages/Detail/TaskDetail"));
 const UpdateTask = React.lazy(() => import("./pages/Task/UpdateTask"));
-const ExportSummary = React.lazy(() =>
-  import("./pages/Detail/RecommendationLatter")
+const ExportSummary = React.lazy(
+  () => import("./pages/Detail/RecommendationLatter"),
 );
 const UserDashboard = React.lazy(() => import("./pages/User/UserDashboard"));
-import ManageTask from "./pages/Detail/ManageTask";
+import ManageTask from "./pages/Task/ManageTask";
 
 // === Root Redirect (berdasarkan role user) ===
 const RootRedirect = () => {
@@ -66,21 +65,18 @@ const RootRedirect = () => {
     if (role === ROLE.ADMIN) {
       prefetchPages.push(
         import("./pages/Admin/AdminDashboard"),
-        import("./pages/Admin/ManageAdminTask"),
         import("./pages/Task/UpdateTask"),
-        import("./pages/Admin/TeamPerformance")
+        import("./pages/Admin/TeamPerformance"),
       );
     } else {
-      prefetchPages.push(
-        import("./pages/User/UserDashboard"),
-      );
+      prefetchPages.push(import("./pages/User/UserDashboard"));
     }
 
     prefetchPages.push(
-      import("./pages/Detail/ManageTask"),
+      import("./pages/Task/ManageTask"),
       import("./pages/Detail/TaskDetail"),
       import("./pages/Detail/RecommendationLatter"),
-      import("./pages/Task/CreateTask")
+      import("./pages/Task/CreateTask"),
     );
 
     Promise.all(prefetchPages).catch(() => {});
@@ -116,7 +112,6 @@ const App = () => {
             {/* ADMIN only */}
             <Route element={<PrivateRoute allowedRoles={[ROLE.ADMIN]} />}>
               <Route path="/admin/dashboard" element={<Dashboard />} />
-              <Route path="/admin/tasks" element={<ManageTasks />} />
               <Route
                 path="/admin/team-performance"
                 element={<TeamPerformance />}

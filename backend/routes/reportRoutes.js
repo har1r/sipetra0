@@ -2,17 +2,17 @@ const express = require("express");
 const { protect } = require("../middlewares/authMiddlewares");
 const {
   exportReport,
-  getDaftarSuratPengantar,
+  getVerifiedTasksForExport,
   addAttachmentToTask,
   getExportedReports,
-  addAttachmentToReport
+  addAttachmentToReport,
 } = require("../controllers/reportControllers");
 
 const router = express.Router();
 
 // Tambahkan route sesuai kontroller
 router.post("/export-selected", protect, exportReport);
-router.get("/daftar-surat-pengantar", protect, getDaftarSuratPengantar);
+router.get("/daftar-surat-pengantar", protect, getVerifiedTasksForExport);
 router.post("/add-attachment/:taskId", protect, addAttachmentToTask);
 router.get("/exported-reports", protect, getExportedReports);
 router.put("/attachment/:reportId", protect, addAttachmentToReport);
