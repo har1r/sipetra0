@@ -6,6 +6,7 @@ import TaskStageProgress from "../../components/cards/TaskStageProgress";
 import { formatDateId } from "../../utils/formatDateId";
 import LoadingSpinner from "../../components/ui/LoadingSpinner";
 import DashboardLayout from "../../components/layouts/DashboardLayout";
+import { HiExclamationCircle, HiCheckCircle, HiXCircle, HiClock } from "react-icons/hi";
 
 const stageLabel = {
   diinput: "Diinput",
@@ -13,16 +14,16 @@ const stageLabel = {
   diteliti: "Diteliti",
   diarsipkan: "Diarsipkan",
   dikirim: "Dikirim",
+  diperiksa: "Diperiksa",
   selesai: "Selesai",
 };
 
-// Helper fungsi
 const formatTitle = (str = "") =>
   str.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
 const formatDateTimeId = (value) => {
   if (!value) return "-";
-  const date = value instanceof Date ? value : new Date(value);
+  const date = new Date(value);
   return new Intl.DateTimeFormat("id-ID", {
     day: "numeric",
     month: "short",
@@ -30,56 +31,41 @@ const formatDateTimeId = (value) => {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
-    timeZone: "Asia/Jakarta",
   }).format(date);
 };
 
 const StatusChip = ({ status }) => {
-  const baseClass =
-    "inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium";
-  if (status === "approved")
-    return (
-      <span className={`${baseClass} bg-emerald-50 text-emerald-700`}>
-        ✔️ Disetujui
-      </span>
-    );
-  if (status === "rejected")
-    return (
-      <span className={`${baseClass} bg-rose-50 text-rose-700`}>
-        ❌ Ditolak
-      </span>
-    );
-  return (
-    <span className={`${baseClass} bg-amber-50 text-amber-700`}>
-      ⏳ Menunggu
-    </span>
-  );
+  const baseClass = "inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold uppercase tracking-wider";
+  
+  switch (status) {
+    case "approved":
+      return <span className={`${baseClass} bg-emerald-50 text-emerald-700`}><HiCheckCircle /> Disetujui</span>;
+    case "rejected":
+      return <span className={`${baseClass} bg-rose-50 text-rose-700`}><HiXCircle /> Ditolak</span>;
+    case "revised":
+      return <span className={`${baseClass} bg-amber-50 text-amber-700`}><HiExclamationCircle /> Revisi</span>;
+    default:
+      return <span className={`${baseClass} bg-slate-50 text-slate-600`}><HiClock /> Menunggu</span>;
+  }
 };
 
 const InfoRow = ({ label, children }) => (
-  <div className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-2 items-start text-sm">
-    <span className="font-medium text-slate-700">{label}</span>
-    <span className="text-slate-900 before:content-[':'] before:mr-1 before:text-slate-400 break-words min-w-0">
-      {children ?? "-"}
+  <div className="grid grid-cols-[120px_1fr] gap-x-2 items-start text-sm py-1">
+    <span className="font-semibold text-slate-500 uppercase text-[10px] tracking-wider mt-1">{label}</span>
+    <span className="text-slate-900 font-medium break-words">
+      : {children ?? "-"}
     </span>
   </div>
 );
 
-const SectionCard = ({
-  title,
-  children,
-  className = "",
-  bodyClassName = "",
-}) => (
-  <section
-    className={`rounded-2xl border border-slate-200 bg-white shadow-sm ${className}`}
-  >
+const SectionCard = ({ title, children, className = "", bodyClassName = "" }) => (
+  <section className={`rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden ${className}`}>
     {title && (
-      <header className="border-b border-slate-200 px-5 py-3">
-        <h2 className="text-base font-semibold text-slate-900">{title}</h2>
+      <header className="bg-slate-50/50 border-b border-slate-200 px-6 py-4">
+        <h2 className="text-sm font-black text-slate-800 uppercase tracking-widest">{title}</h2>
       </header>
     )}
-    <div className={`p-5 ${bodyClassName}`}>{children}</div>
+    <div className={`p-6 ${bodyClassName}`}>{children}</div>
   </section>
 );
 
@@ -97,210 +83,163 @@ const TaskDetail = () => {
       abortRef.current = controller;
 
       try {
-        const token = localStorage.getItem("token");
-        const headers = token ? { Authorization: `Bearer ${token}` } : {};
-
-        const response = await axiosInstance.get(
-          API_PATHS.TASK.GET_TASK_BY_ID(id),
-          {
-            signal: controller.signal,
-            headers,
-          }
-        );
-
+        const response = await axiosInstance.get(API_PATHS.TASK.GET_TASK_BY_ID(id), {
+          signal: controller.signal,
+        });
         setTask(response.data || null);
       } catch (error) {
-        if (error?.response?.status === 401) {
-          console.warn("Akses ditolak: Harap login terlebih dahulu.");
-        } else if (error?.name !== "CanceledError") {
-          console.error("Gagal mengambil data task:", error);
-        }
-        setTask(null);
+        if (error?.name !== "CanceledError") console.error("Error:", error);
       } finally {
         setLoading(false);
       }
     };
-
     fetchTask();
     return () => abortRef.current?.abort();
   }, [id]);
 
-  const approvals = useMemo(() => task?.approvals ?? [], [task]);
-
-  if (loading) {
-    return (
-      <div className="min-h-screen grid place-items-center bg-slate-50">
-        <LoadingSpinner />
-      </div>
-    );
-  }
-
-  if (!task) {
-    return (
-      <div className="min-h-screen bg-slate-50 py-12">
-        <div className="mx-auto max-w-2xl px-4 sm:px-6 lg:px-8">
-          <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-            <h2 className="mb-2 text-xl font-semibold text-slate-900">
-              Task tidak ditemukan
-            </h2>
-            <p className="text-sm text-slate-600">
-              Pastikan tautan benar atau hubungi admin.
-            </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  if (loading) return <div className="min-h-screen grid place-items-center bg-slate-50"><LoadingSpinner /></div>;
+  if (!task) return <div className="p-10 text-center font-bold">Data tidak ditemukan</div>;
 
   const {
     mainData = {},
     additionalData = [],
-    title,
-    createdAt,
+    approvals = [],
+    revisedHistory,
+    overallStatus,
     currentStage,
+    createdAt,
+    title
   } = task;
 
   return (
-    <DashboardLayout>
-      <main className="bg-slate-50">
-        <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-10 space-y-6">
-          {/* HEADER */}
-          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
+    <DashboardLayout activeMenu="Manage Tasks">
+      <main className="bg-slate-50 min-h-screen pb-20">
+        <div className="mx-auto max-w-6xl px-4 py-8 space-y-6">
+          
+          {/* ALERT REVISI */}
+          {overallStatus === "revised" && revisedHistory && !revisedHistory.isResolved && (
+            <div className="rounded-2xl border-2 border-amber-200 bg-amber-50 p-5 flex gap-4 animate-pulse">
+              <HiExclamationCircle className="w-8 h-8 text-amber-500 shrink-0" />
               <div>
-                <h1 className="text-lg font-semibold text-slate-900">
-                  Detail Permohonan
-                </h1>
-                <p className="mt-1 text-xs text-slate-500">
-                  Dibuat:{" "}
-                  <span className="font-medium text-slate-700">
-                    {formatDateId(createdAt)}
-                  </span>
+                <h3 className="font-black text-amber-900 uppercase text-sm tracking-tight">Perhatian: Berkas Perlu Revisi</h3>
+                <p className="text-sm text-amber-800 mt-1 font-medium">
+                  Catatan dari {revisedHistory.revisedBy?.name || 'Pemeriksa'}: <span className="italic font-bold">"{revisedHistory.revisedNote}"</span>
                 </p>
+                <p className="text-[10px] text-amber-600 mt-2 font-bold uppercase">Waktu: {formatDateTimeId(revisedHistory.revisedAt)}</p>
               </div>
-              <span className="inline-flex items-center gap-1 rounded-full bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700">
-                Tahap:{" "}
-                {stageLabel[String(currentStage)?.toLowerCase()] ||
-                  formatTitle(currentStage)}
-              </span>
+            </div>
+          )}
+
+          {/* TOP HEADER CARD */}
+          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm flex flex-col md:flex-row justify-between items-center gap-4">
+            <div className="flex items-center gap-4">
+              <div className="p-4 bg-indigo-50 rounded-2xl text-indigo-600 font-black text-xl">#</div>
+              <div>
+                <h1 className="text-xl font-black text-slate-800 uppercase tracking-tight">{mainData.nopel}</h1>
+                <p className="text-xs font-bold text-slate-400">Terdaftar pada {formatDateId(createdAt)}</p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+               <StatusChip status={overallStatus} />
+               <div className="px-4 py-1.5 bg-slate-900 text-white rounded-full text-[10px] font-black uppercase tracking-widest">
+                 Stage: {stageLabel[currentStage] || currentStage}
+               </div>
             </div>
           </section>
 
-          {/* PROGRESS & DETAIL */}
-          <section>
-            <div className="grid md:grid-cols-[minmax(0,240px)_1fr] gap-6">
-              <SectionCard
-                title="Progress Tahapan"
-                className="self-start md:sticky md:top-4"
-              >
-                <div className="w-full max-w-[220px] mx-auto">
-                  <TaskStageProgress task={task} orientation="vertical" />
+          <div className="grid lg:grid-cols-[300px_1fr] gap-8">
+            {/* LEFT: PROGRESS */}
+            <aside className="space-y-6">
+              <SectionCard title="Progress Tahapan">
+                <TaskStageProgress task={task} orientation="vertical" />
+              </SectionCard>
+              
+              <SectionCard title="Pembuat Berkas">
+                <div className="space-y-1">
+                  <p className="text-sm font-bold text-slate-800">{task.createdBy?.name || "System"}</p>
+                  <p className="text-xs text-slate-500">{task.createdBy?.email}</p>
+                  <div className="mt-3 px-3 py-1 bg-blue-50 text-blue-600 rounded-lg text-[10px] font-black uppercase inline-block">
+                    {task.createdBy?.role}
+                  </div>
+                </div>
+              </SectionCard>
+            </aside>
+
+            {/* RIGHT: DETAILS */}
+            <div className="space-y-6">
+              <SectionCard title="Data Utama Objek Pajak">
+                <div className="grid md:grid-cols-2 gap-x-8 gap-y-2">
+                  <InfoRow label="NOP">{mainData.nop}</InfoRow>
+                  <InfoRow label="Nama Lama">{mainData.oldName}</InfoRow>
+                  <InfoRow label="Kecamatan">{mainData.subdistrict}</InfoRow>
+                  <InfoRow label="Kelurahan">{mainData.village}</InfoRow>
+                  <div className="md:col-span-2 border-t my-2 pt-2">
+                    <InfoRow label="Alamat OP">{mainData.address}</InfoRow>
+                  </div>
+                  <InfoRow label="Luas T. Lama">{mainData.oldlandWide} m²</InfoRow>
+                  <InfoRow label="Luas B. Lama">{mainData.oldbuildingWide} m²</InfoRow>
                 </div>
               </SectionCard>
 
-              <div className="space-y-6">
-                <SectionCard title="Data Utama">
-                  <div className="grid md:grid-cols-2 gap-6">
-                    <div className="space-y-2">
-                      <InfoRow label="NOPEL">{mainData.nopel}</InfoRow>
-                      <InfoRow label="NOP">{mainData.nop}</InfoRow>
-                      <InfoRow label="Nama Lama">{mainData.oldName}</InfoRow>
-                      <InfoRow label="Alamat">{mainData.address}</InfoRow>
-                    </div>
-                    <div className="space-y-2">
-                      <InfoRow label="Kelurahan">{mainData.village}</InfoRow>
-                      <InfoRow label="Kecamatan">
-                        {mainData.subdistrict}
-                      </InfoRow>
-                      <InfoRow label="Permohonan">{formatTitle(title)}</InfoRow>
-                    </div>
-                  </div>
-                </SectionCard>
-
-                <SectionCard title="Data Tambahan">
-                  <div className="grid gap-4">
-                    {additionalData.length > 0 ? (
-                      additionalData.map((item, index) => (
-                        <div
-                          key={index}
-                          className="rounded-lg border border-slate-200 bg-slate-50 p-4 shadow-sm"
-                        >
-                          <div className="grid sm:grid-cols-2 gap-2">
-                            <InfoRow label="Nama Baru">{item.newName}</InfoRow>
-                            <InfoRow label="Nomor Sertifikat">
-                              {item.certificate || "-"}
-                            </InfoRow>
-                            <InfoRow label="Luas Tanah">
-                              {item.landWide ? `${item.landWide} m²` : "-"}
-                            </InfoRow>
-                            <InfoRow label="Luas Bangunan">
-                              {item.buildingWide
-                                ? `${item.buildingWide} m²`
-                                : "-"}
-                            </InfoRow>
+              <SectionCard title={`Data Pecahan (${additionalData.length} Item)`}>
+                <div className="space-y-4">
+                  {additionalData.map((item, index) => (
+                    <div key={index} className="group relative rounded-2xl border border-slate-100 bg-slate-50/50 p-5 hover:bg-white hover:border-indigo-200 transition-all">
+                      <div className="absolute top-4 right-4 text-[10px] font-black text-slate-300 group-hover:text-indigo-200">#{index + 1}</div>
+                      <div className="grid md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <InfoRow label="Nama Baru">{item.newName}</InfoRow>
+                          <InfoRow label="Sertifikat">{item.certificate}</InfoRow>
+                        </div>
+                        <div className="space-y-2">
+                          <InfoRow label="Luas Tanah">{item.landWide} m²</InfoRow>
+                          <InfoRow label="Luas Bangunan">{item.buildingWide} m²</InfoRow>
+                          <div className="flex justify-end mt-2">
+                            <span className={`text-[9px] font-black px-2 py-1 rounded ${item.addStatus === 'approved' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                              {item.addStatus?.toUpperCase()}
+                            </span>
                           </div>
                         </div>
-                      ))
-                    ) : (
-                      <p className="text-sm text-slate-500 italic">
-                        Tidak ada data tambahan.
-                      </p>
-                    )}
-                  </div>
-                </SectionCard>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </SectionCard>
 
-                <SectionCard title="Riwayat Persetujuan" bodyClassName="p-0">
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full text-sm">
-                      <thead className="bg-slate-100 text-slate-800">
-                        <tr>
-                          <th className="px-3 py-2 text-left">Tahapan</th>
-                          <th className="px-3 py-2 text-center">Status</th>
-                          <th className="px-3 py-2 text-left">Waktu</th>
-                          <th className="px-3 py-2 text-left">Catatan</th>
+              <SectionCard title="Log Approval" bodyClassName="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead className="bg-slate-50 border-b border-slate-200">
+                      <tr className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                        <th className="px-6 py-4">Tahapan</th>
+                        <th className="px-6 py-4">Pemeriksa</th>
+                        <th className="px-6 py-4">Status</th>
+                        <th className="px-6 py-4 text-right">Waktu</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {approvals.map((app, i) => (
+                        <tr key={i} className="hover:bg-slate-50/50 transition-colors text-sm">
+                          <td className="px-6 py-4 font-bold text-slate-700">{stageLabel[app.stage] || app.stage}</td>
+                          <td className="px-6 py-4">
+                            <div className="text-xs font-bold">{app.approverId?.name || "-"}</div>
+                            <div className="text-[10px] text-slate-400">{app.approverId?.role || ""}</div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <StatusChip status={app.status} />
+                            {app.note && <p className="text-[11px] mt-1 italic text-slate-500">"{app.note}"</p>}
+                          </td>
+                          <td className="px-6 py-4 text-right text-xs font-mono text-slate-400">
+                            {formatDateTimeId(app.approvedAt)}
+                          </td>
                         </tr>
-                      </thead>
-                      <tbody className="[&>tr:nth-child(even)]:bg-slate-50">
-                        {approvals.length > 0 ? (
-                          approvals.map((approval, idx) => (
-                            <tr key={idx} className="hover:bg-indigo-50/40">
-                              <td className="px-3 py-2">
-                                {stageLabel[approval.stage] ||
-                                  formatTitle(approval.stage)}
-                              </td>
-                              <td className="px-3 py-2 text-center">
-                                <StatusChip status={approval.status} />
-                              </td>
-                              <td className="px-3 py-2">
-                                {approval.approvedAt
-                                  ? formatDateTimeId(approval.approvedAt)
-                                  : "-"}
-                              </td>
-                              <td
-                                className="px-3 py-2"
-                                title={approval.note || "-"}
-                              >
-                                {approval.note || "-"}
-                              </td>
-                            </tr>
-                          ))
-                        ) : (
-                          <tr>
-                            <td
-                              colSpan={4}
-                              className="py-4 text-center italic text-slate-500"
-                            >
-                              Belum ada data approval.
-                            </td>
-                          </tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </SectionCard>
-              </div>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </SectionCard>
             </div>
-          </section>
+          </div>
         </div>
       </main>
     </DashboardLayout>

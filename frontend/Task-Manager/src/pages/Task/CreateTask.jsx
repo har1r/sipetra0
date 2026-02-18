@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
 import {
@@ -9,8 +9,9 @@ import {
   FaBuilding,
   FaFileSignature,
   FaRegStickyNote,
+  FaMap
 } from "react-icons/fa";
-import { FaClipboardList } from "react-icons/fa6";
+import { FaClipboardList, FaPlus } from "react-icons/fa6";
 import { HiOutlineX } from "react-icons/hi";
 
 import DashboardLayout from "../../components/layouts/DashboardLayout";
@@ -19,12 +20,13 @@ import { API_PATHS } from "../../utils/apiPaths";
 import { TITLE_OPTIONS, SUBDISTRICT_OPTIONS } from "../../utils/data";
 import { toTitle, toUpper, toNumber } from "../../utils/string";
 
-const INITIAL_ADDITIONAL = {
+const INITIAL_ADDITIONAL_ITEM = {
   newName: "",
   landWide: "",
   buildingWide: "",
   certificate: "",
-  note: "", // Opsional
+  addStatus: "in_progress",
+  note: "",
 };
 
 const CreateTask = () => {
@@ -32,110 +34,245 @@ const CreateTask = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState({});
 
-  // States
-  const [title, setTitle] = useState("");
-  const [globalNote, setGlobalNote] = useState("");
-  const [mainData, setMainData] = useState({
-    nopel: "",
-    nop: "",
-    oldName: "",
-    address: "",
-    village: "",
-    subdistrict: "",
+  // Unified State for better consistency
+  const [formData, setFormData] = useState({
+    title: "",
+    mainData: {
+      nopel: "",
+      nop: "",
+      oldName: "",
+      address: "",
+      village: "",
+      subdistrict: "",
+      oldlandWide: "",
+      oldbuildingWide: "",
+    },
+    globalNote: ""
   });
+
   const [additionalData, setAdditionalData] = useState([
-    { ...INITIAL_ADDITIONAL },
+    { ...INITIAL_ADDITIONAL_ITEM },
   ]);
 
-  // Handlers
-  const handleMainChange = (e) => {
-    const { name, value } = e.target;
-    setMainData((prev) => ({ ...prev, [name]: value }));
-    // Hapus error saat user mulai mengetik
-    if (errors[`main_${name}`]) {
-      setErrors((prev) => {
-        const newErrs = { ...prev };
-        delete newErrs[`main_${name}`];
-        return newErrs;
-      });
+  // --- Handlers ---
+  const handleMainChange = (event) => {
+    const { name, value } = event.target;
+
+    // Update mainData or top-level fields (title/globalNote)
+    if (name === "title" || name === "globalNote") {
+      setFormData((previous) => ({ ...previous, [name]: value }));
+    } else {
+      setFormData((previous) => ({
+        ...previous,
+        mainData: { ...previous.mainData, [name]: value },
+      }));
+    }
+
+    // Clear error dynamically
+    const errorKey = name === "title" ? "title" : `main_${name}`;
+    if (errors[errorKey]) {
+      const updatedErrors = { ...errors };
+      delete updatedErrors[errorKey];
+      setErrors(updatedErrors);
     }
   };
 
-  const handleAdditionalChange = (e, index) => {
-    const { name, value } = e.target;
-    setAdditionalData((prev) => {
-      const updated = [...prev];
-      updated[index] = { ...updated[index], [name]: value };
-      return updated;
-    });
-    // Hapus error spesifik pecahan saat diketik
-    const errKey = `extra_${name}_${index}`;
-    if (errors[errKey]) {
-      setErrors((prev) => {
-        const newErrs = { ...prev };
-        delete newErrs[errKey];
-        return newErrs;
-      });
+  const handleAdditionalChange = (event, index) => {
+    const { name, value } = event.target;
+    const updatedList = [...additionalData];
+    updatedList[index][name] = value;
+    setAdditionalData(updatedList);
+
+    const errorKey = `extra_${name}_${index}`;
+    if (errors[errorKey]) {
+      const updatedErrors = { ...errors };
+      delete updatedErrors[errorKey];
+      setErrors(updatedErrors);
     }
   };
 
+  const addAdditionalRow = () => {
+    setAdditionalData((previous) => [
+      ...previous,
+      { ...INITIAL_ADDITIONAL_ITEM },
+    ]);
+  };
+
+  const removeAdditionalRow = (indexToRemove) => {
+    if (additionalData.length > 1) {
+      setAdditionalData((previous) =>
+        previous.filter((_, index) => index !== indexToRemove),
+      );
+    }
+  };
+
+  // --- UX Improvement: Real-time calculation ---
+  const totalLandAllocated = useMemo(() => {
+    return additionalData.reduce(
+      (sum, item) => sum + toNumber(item.landWide),
+      0,
+    );
+  }, [additionalData]);
+
+  // Global Logic Variable (Re-computed setiap kali formData.title berubah)
+  const isPengaktifan = formData.title.toLowerCase().includes("pengaktifan");
+
+  // --- Logic & Validation ---
   const validateForm = () => {
     const newErrors = {};
+    const missingFields = [];
 
-    // 1. Validasi Jenis Permohonan
-    if (!title) newErrors.title = true;
+    // Helper untuk cek validitas (Mengizinkan angka 0 dan string "-")
+    const isInvalid = (val) => {
+      return val === undefined || val === null || val.toString().trim() === "";
+    };
 
-    // 2. Validasi Data Utama (Semua Wajib)
-    Object.keys(mainData).forEach((key) => {
-      if (!mainData[key] || mainData[key].trim() === "") {
+    if (!formData.title) {
+      newErrors.title = true;
+      missingFields.push("Jenis Permohonan");
+    }
+
+    const mainLabelMap = {
+      nopel: "No. Pelayanan",
+      nop: "NOP",
+      oldName: "Nama WP Lama",
+      address: "Alamat",
+      village: "Kelurahan",
+      subdistrict: "Kecamatan",
+      oldlandWide: "Luas Tanah Lama",
+      oldbuildingWide: "Luas Bangunan Lama",
+    };
+
+    Object.entries(formData.mainData).forEach(([key, value]) => {
+      // LOGIKA BARU: Jika Pengaktifan, nopel boleh kosong karena diisi otomatis oleh Backend
+      if (key === "nopel" && isPengaktifan) return;
+
+      // Gunakan isInvalid agar angka 0 tidak dianggap error
+      if (isInvalid(value)) {
         newErrors[`main_${key}`] = true;
+        if (mainLabelMap[key]) missingFields.push(mainLabelMap[key]);
       }
     });
 
-    // 3. Validasi Data Pecahan (Semua kecuali 'note' Wajib)
-    additionalData.forEach((item, idx) => {
-      if (!item.newName) newErrors[`extra_newName_${idx}`] = true;
-      if (!item.certificate) newErrors[`extra_certificate_${idx}`] = true;
-      if (!item.landWide) newErrors[`extra_landWide_${idx}`] = true;
-      if (!item.buildingWide) newErrors[`extra_buildingWide_${idx}`] = true;
+    additionalData.forEach((item, index) => {
+      ["newName", "certificate", "landWide", "buildingWide"].forEach(
+        (field) => {
+          // Gunakan isInvalid agar angka 0 tidak dianggap error
+          if (isInvalid(item[field])) {
+            newErrors[`extra_${field}_${index}`] = true;
+          }
+          if (
+            !missingFields.includes(`Detail Pecahan ${index + 1}`) &&
+            newErrors[`extra_${field}_${index}`]
+          ) {
+            missingFields.push(`Detail Pecahan ${index + 1}`);
+          }
+        },
+      );
     });
 
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    return {
+      isValid: Object.keys(newErrors).length === 0,
+      missingFields,
+    };
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (event) => {
+    event.preventDefault();
 
-    if (!validateForm()) {
-      toast.error("Mohon lengkapi semua bidang yang wajib diisi!");
+    const { isValid, missingFields } = validateForm();
+
+    if (!isValid) {
+      const errorMsg =
+        missingFields.length <= 3
+          ? `Kolom ${missingFields.join(", ")} wajib diisi.`
+          : `Ada ${missingFields.length} kolom yang belum diisi!`;
+
+      toast.error(errorMsg, {
+        duration: 4000,
+        style: { border: "1px solid #ef4444", padding: "16px" },
+      });
+
+      setTimeout(() => {
+        const firstErrorElement = document.querySelector(".border-red-500");
+        if (firstErrorElement) {
+          firstErrorElement.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+          });
+          firstErrorElement.focus();
+        }
+      }, 100);
       return;
     }
 
     setIsSubmitting(true);
+
     try {
       const payload = {
-        title,
-        globalNote,
+        title: formData.title,
+        globalNote: formData.globalNote.trim(),
         mainData: {
-          ...mainData,
-          nopel: toUpper(mainData.nopel),
-          oldName: toTitle(mainData.oldName),
-          address: toTitle(mainData.address),
+          ...formData.mainData,
+
+          nopel:
+            isPengaktifan && !formData.mainData.nopel
+              ? ""
+              : toUpper(formData.mainData.nopel),
+          oldName: toTitle(formData.mainData.oldName),
+          address: toTitle(formData.mainData.address),
+          // toNumber memastikan string "" atau "-" dikirim sebagai angka jika memungkinkan,
+          // atau 0 jika memang diinput 0
+          oldlandWide: toNumber(formData.mainData.oldlandWide),
+          oldbuildingWide: toNumber(formData.mainData.oldbuildingWide),
         },
         additionalData: additionalData.map((item) => ({
           ...item,
+          newName: toTitle(item.newName),
           landWide: toNumber(item.landWide),
           buildingWide: toNumber(item.buildingWide),
-          newName: toTitle(item.newName),
         })),
       };
 
-      await axiosInstance.post(API_PATHS.TASK.CREATE_TASK, payload);
-      toast.success("Berkas berhasil disimpan!");
+      const response = await axiosInstance.post(
+        API_PATHS.TASK.CREATE_TASK,
+        payload,
+      );
+
+      toast.success(response.data.message || "Berkas berhasil didaftarkan!");
+
       navigate("/manage-task/task");
-    } catch (err) {
-      toast.error(err.response?.data?.message || "Gagal menyimpan berkas.");
+    } catch (error) {
+      const serverMessage = error.response?.data?.message || "";
+
+      if (
+        serverMessage.toLowerCase().includes("sudah terdaftar") ||
+        serverMessage.toLowerCase().includes("nopel")
+      ) {
+        setErrors((prev) => ({ ...prev, main_nopel: true }));
+
+        toast.error("No. Pelayanan (NOPEL) sudah digunakan!", {
+          duration: 4000,
+          style: { border: "1px solid #ef4444", padding: "16px" },
+        });
+
+        setTimeout(() => {
+          const nopelElement =
+            document.getElementsByName("nopel")[0] ||
+            document.querySelector(".border-red-500");
+
+          if (nopelElement) {
+            nopelElement.scrollIntoView({
+              behavior: "smooth",
+              block: "center",
+            });
+            nopelElement.focus();
+          }
+        }, 100);
+      } else {
+        toast.error(serverMessage || "Gagal menyimpan berkas.");
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -143,14 +280,22 @@ const CreateTask = () => {
 
   return (
     <DashboardLayout>
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 animate-fadeIn">
         <div className="lg:col-span-3 space-y-6">
           <div className="bg-white rounded-3xl p-8 border border-slate-200 shadow-sm">
-            <header className="mb-8">
-              <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
-                <FaClipboardList className="text-emerald-600" /> Buat Permohonan
-              </h2>
-              <div className="h-1 w-12 bg-emerald-500 rounded-full mt-2" />
+            <header className="mb-8 flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-3">
+                  <FaClipboardList className="text-emerald-600" /> Buat
+                  Permohonan
+                </h2>
+                <div className="h-1.5 w-12 bg-emerald-500 rounded-full mt-2" />
+              </div>
+              <div className="hidden sm:flex flex-col items-end">
+                <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full border border-emerald-100">
+                  Sequential Approval Ready
+                </span>
+              </div>
             </header>
 
             <form onSubmit={handleSubmit} className="space-y-8">
@@ -160,145 +305,208 @@ const CreateTask = () => {
                   Jenis Permohonan *
                 </label>
                 <SelectField
-                  value={title}
+                  name="title"
+                  value={formData.title}
                   error={errors.title}
-                  onChange={(e) => {
-                    setTitle(e.target.value);
-                    if (errors.title)
-                      setErrors((prev) => ({ ...prev, title: false }));
-                  }}
+                  onChange={handleMainChange}
                   options={TITLE_OPTIONS}
                   label="Jenis Permohonan"
                 />
               </div>
 
-              {/* Data Utama */}
-              <div className="space-y-4">
-                <h3 className="font-bold text-slate-700 flex items-center gap-2 border-b pb-2">
-                  Data Utama
+              {/* Data Utama Section */}
+              <section className="space-y-4">
+                <h3 className="font-bold text-slate-700 flex items-center gap-2 border-b border-slate-100 pb-2">
+                  <span className="p-1.5 bg-emerald-100 text-emerald-600 rounded-lg">
+                    <FaHome size={14} />
+                  </span>
+                  Data Utama Objek Pajak
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <InputField
                     icon={FaHashtag}
                     name="nopel"
-                    label="NOPEL"
-                    value={mainData.nopel}
+                    label={
+                      isPengaktifan
+                        ? "NOPEL Otomatis (Sistem)"
+                        : "No. Pelayanan (NOPEL)"
+                    }
+                    // Jika pengaktifan, tampilkan teks placeholder sistem agar user tidak bingung
+                    value={
+                      isPengaktifan
+                        ? "DIBUAT OTOMATIS"
+                        : formData.mainData.nopel
+                    }
                     onChange={handleMainChange}
                     error={errors.main_nopel}
+                    disabled={isPengaktifan}
                   />
                   <InputField
                     icon={FaFileSignature}
                     name="nop"
-                    label="NOP"
-                    value={mainData.nop}
+                    label="Nomor Objek Pajak (NOP)"
+                    value={formData.mainData.nop}
                     onChange={handleMainChange}
                     error={errors.main_nop}
                   />
                   <InputField
                     icon={FaRegUser}
                     name="oldName"
-                    label="Nama Lama"
-                    value={mainData.oldName}
+                    label="Nama Wajib Pajak (Lama)"
+                    value={formData.mainData.oldName}
                     onChange={handleMainChange}
                     error={errors.main_oldName}
                   />
                   <InputField
-                    icon={FaMapMarkerAlt}
+                    icon={FaMap}
                     name="address"
-                    label="Alamat"
-                    value={mainData.address}
+                    label="Alamat Objek"
+                    value={formData.mainData.address}
                     onChange={handleMainChange}
                     error={errors.main_address}
                   />
                   <InputField
-                    icon={FaHome}
+                    icon={FaMap}
                     name="village"
-                    label="Desa/Kelurahan"
-                    value={mainData.village}
+                    label="Kelurahan / Desa"
+                    value={formData.mainData.village}
                     onChange={handleMainChange}
                     error={errors.main_village}
                   />
                   <SelectField
                     name="subdistrict"
                     label="Kecamatan"
-                    value={mainData.subdistrict}
+                    value={formData.mainData.subdistrict}
                     options={SUBDISTRICT_OPTIONS}
                     onChange={handleMainChange}
                     error={errors.main_subdistrict}
                   />
-                </div>
-              </div>
-
-              {/* Data Pecahan */}
-              <div className="space-y-4">
-                <h3 className="font-bold text-slate-700 flex items-center gap-2 border-b pb-2">
-                  Data Pecahan
-                </h3>
-                {additionalData.map((item, idx) => (
-                  <AdditionalRow
-                    key={idx}
-                    index={idx}
-                    item={item}
-                    errors={errors}
-                    onChange={handleAdditionalChange}
-                    onRemove={(i) =>
-                      setAdditionalData((prev) =>
-                        prev.filter((_, idx) => idx !== i),
-                      )
-                    }
-                    canRemove={additionalData.length > 1}
+                  <InputField
+                    icon={FaMapMarkerAlt}
+                    name="oldlandWide"
+                    type="number"
+                    label="Luas Tanah (Lama)"
+                    value={formData.mainData.oldlandWide}
+                    onChange={handleMainChange}
+                    error={errors.main_oldlandWide}
                   />
-                ))}
+                  <InputField
+                    icon={FaHome}
+                    name="oldbuildingWide"
+                    type="number"
+                    label="Luas Bangunan (Lama)"
+                    value={formData.mainData.oldbuildingWide}
+                    onChange={handleMainChange}
+                    error={errors.main_oldbuildingWide}
+                  />
+                </div>
+              </section>
+
+              {/* Data Pecahan Section */}
+              <section className="space-y-4">
+                <div className="flex justify-between items-end border-b border-slate-100 pb-2">
+                  <h3 className="font-bold text-slate-700 flex items-center gap-2">
+                    <span className="p-1.5 bg-blue-100 text-blue-600 rounded-lg">
+                      <FaBuilding size={14} />
+                    </span>
+                    Rincian Pecahan
+                  </h3>
+                  {toNumber(formData.mainData.oldlandWide) > 0 && (
+                    <span
+                      className={`text-[10px] font-bold px-2 py-1 rounded-md ${totalLandAllocated > toNumber(formData.mainData.oldlandWide) ? "bg-red-100 text-red-600" : "bg-slate-100 text-slate-500"}`}
+                    >
+                      Terpakai: {totalLandAllocated} /{" "}
+                      {formData.mainData.oldlandWide} m²
+                    </span>
+                  )}
+                </div>
+
+                <div className="space-y-4">
+                  {additionalData.map((item, index) => (
+                    <AdditionalRow
+                      key={index}
+                      index={index}
+                      item={item}
+                      errors={errors}
+                      onChange={handleAdditionalChange}
+                      onRemove={removeAdditionalRow}
+                      canRemove={additionalData.length > 1}
+                    />
+                  ))}
+                </div>
+
                 <button
                   type="button"
-                  onClick={() =>
-                    setAdditionalData((p) => [...p, { ...INITIAL_ADDITIONAL }])
-                  }
-                  className="bg-emerald-50 text-emerald-600 px-4 py-2 rounded-lg font-bold text-sm hover:bg-emerald-100 transition-colors"
+                  onClick={addAdditionalRow}
+                  className="flex items-center gap-2 text-emerald-600 bg-emerald-50 hover:bg-emerald-100 px-5 py-3 rounded-2xl font-bold text-sm transition-all border border-dashed border-emerald-200"
                 >
-                  + Tambah Baris Pecahan
+                  <FaPlus size={12} /> Tambah Baris Pecahan
                 </button>
-              </div>
+              </section>
 
-              {/* Catatan Global */}
-              <div className="space-y-3 pt-4">
-                <h3 className="font-bold text-slate-700 flex items-center gap-2 border-b pb-2">
-                  <FaRegStickyNote className="text-emerald-500" /> Catatan
-                  Keseluruhan (Opsional)
-                </h3>
+              {/* Global Note */}
+              <section className="space-y-3 pt-4">
+                <label className="font-bold text-sm text-slate-700 flex items-center gap-2">
+                  <FaRegStickyNote className="text-slate-400" /> Catatan
+                  Tambahan (Opsional)
+                </label>
                 <InputField
                   as="textarea"
-                  icon={FaRegStickyNote}
                   name="globalNote"
-                  label="Tuliskan catatan panjang di sini jika ada..."
-                  value={globalNote}
-                  onChange={(e) => setGlobalNote(e.target.value)}
+                  label="Berikan keterangan tambahan jika diperlukan..."
+                  value={formData.globalNote}
+                  onChange={handleMainChange}
                 />
-              </div>
+              </section>
 
-              <div className="pt-6 border-t flex justify-end">
+              <div className="pt-8 border-t border-slate-100">
                 <button
+                  type="submit"
                   disabled={isSubmitting}
-                  className="bg-emerald-600 text-white px-10 py-3 rounded-xl font-bold hover:bg-emerald-700 transition-all disabled:opacity-50 shadow-lg"
+                  className="w-full md:w-auto ml-auto bg-emerald-600 text-white px-12 py-4 rounded-2xl font-bold hover:bg-emerald-700 transition-all disabled:opacity-50 shadow-lg shadow-emerald-200 flex items-center justify-center gap-3"
                 >
-                  {isSubmitting ? "Sedang Menyimpan..." : "Simpan Berkas"}
+                  {isSubmitting ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                      Memproses...
+                    </>
+                  ) : (
+                    "Daftarkan Permohonan"
+                  )}
                 </button>
               </div>
             </form>
           </div>
         </div>
 
+        {/* Sidebar Guide */}
         <aside className="lg:col-span-1">
-          <div className="bg-slate-800 text-white p-6 rounded-3xl sticky top-24 shadow-xl">
-            <h4 className="font-bold mb-4 flex items-center gap-2 text-emerald-400">
-              💡 Petunjuk
+          <div className="bg-slate-900 text-white p-7 rounded-[2.5rem] sticky top-24 shadow-2xl">
+            <h4 className="font-bold mb-6 flex items-center gap-2 text-emerald-400">
+              <span className="w-2 h-2 bg-emerald-400 rounded-full" /> Petunjuk
             </h4>
-            <ul className="text-sm space-y-4 opacity-90 leading-relaxed">
-              <li>• Field bertanda merah wajib diisi.</li>
-              <li>
-                • Hanya bagian <b>Catatan</b> yang boleh dikosongkan.
+            <ul className="text-xs space-y-6 opacity-90">
+              <li className="flex gap-3">
+                <b className="text-emerald-400">01.</b>
+                <p>
+                  <b>NOPEL</b> bersifat unik. Sistem akan menolak jika NOPEL
+                  sudah terdaftar sebelumnya.
+                </p>
               </li>
-              <li>• Gunakan angka untuk input luas.</li>
+              <li className="flex gap-3">
+                <b className="text-emerald-400">02.</b>
+                <p>
+                  Tahapan <b>diinput</b> akan otomatis disetujui oleh sistem
+                  setelah Anda menekan tombol simpan.
+                </p>
+              </li>
+              <li className="flex gap-3">
+                <b className="text-emerald-400">03.</b>
+                <p>
+                  Jika jenisnya <b>Pengaktifan</b>, sistem akan melompati
+                  beberapa tahap verifikasi secara otomatis.
+                </p>
+              </li>
             </ul>
           </div>
         </aside>
@@ -307,41 +515,58 @@ const CreateTask = () => {
   );
 };
 
-// --- Sub-Components ---
-
-const InputField = ({ icon: Icon, label, error, as = "input", ...props }) => (
-  <div className="relative group w-full">
-    <Icon
-      className={`absolute left-3 ${as === "textarea" ? "top-4" : "top-3"} ${error ? "text-red-500" : "text-slate-400 group-focus-within:text-emerald-500"} transition-colors`}
-    />
-    {as === "textarea" ? (
-      <textarea
-        className={`w-full pl-10 pr-4 py-3 bg-slate-50 border rounded-xl outline-none transition-all text-sm min-h-[120px] resize-y
-          ${error ? "border-red-500 ring-1 ring-red-100 bg-red-50" : "border-slate-200 focus:ring-2 focus:ring-emerald-500"}`}
-        placeholder={error ? `${label} (Wajib diisi)` : label}
-        {...props}
-      />
-    ) : (
-      <input
-        className={`w-full pl-10 pr-4 py-2 bg-slate-50 border rounded-xl outline-none transition-all text-sm
-          ${error ? "border-red-500 ring-1 ring-red-100 bg-red-50" : "border-slate-200 focus:ring-2 focus:ring-emerald-500"}`}
-        placeholder={error ? `${label} (Wajib diisi)` : label}
-        {...props}
-      />
-    )}
+// --- Sub-Components (Optimized) ---
+const InputField = ({ icon: Icon, label, error, as = "input", disabled, ...props }) => (
+  <div className="w-full space-y-1">
+    <div className="relative group">
+      {Icon && (
+        <Icon
+          className={`absolute left-4 ${as === "textarea" ? "top-4" : "top-3.5"} 
+          ${error ? "text-red-500" : "text-slate-400 group-focus-within:text-emerald-500"} 
+          ${disabled ? "text-slate-300" : ""} transition-colors`}
+        />
+      )}
+      {as === "textarea" ? (
+        <textarea
+          disabled={disabled}
+          className={`w-full pl-11 pr-4 py-3.5 border rounded-2xl outline-none transition-all text-sm min-h-[100px] 
+            ${disabled 
+              ? "bg-slate-100 border-slate-200 text-slate-400 cursor-not-allowed" 
+              : error 
+                ? "border-red-500 bg-red-50 focus:ring-4 focus:ring-red-500/10 focus:border-red-500" 
+                : "bg-slate-50 border-slate-200 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500"
+            }`}
+          placeholder={label}
+          {...props}
+        />
+      ) : (
+        <input
+          disabled={disabled}
+          className={`w-full pl-11 pr-4 py-3 border rounded-2xl outline-none transition-all text-sm
+            ${disabled 
+              ? "bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed font-medium" 
+              : error 
+                ? "border-red-500 bg-red-50 focus:ring-4 focus:ring-red-500/10 focus:border-red-500" 
+                : "bg-slate-50 border-slate-200 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500"
+            }`}
+          placeholder={label}
+          {...props}
+        />
+      )}
+    </div>
   </div>
 );
 
 const SelectField = ({ label, options, error, ...props }) => (
   <select
-    className={`w-full px-4 py-2 bg-slate-50 border rounded-xl outline-none text-sm cursor-pointer transition-all
-      ${error ? "border-red-500 ring-1 ring-red-100 bg-red-50" : "border-slate-200 focus:ring-2 focus:ring-emerald-500"}`}
+    className={`w-full px-4 py-3.5 bg-slate-50 border rounded-2xl outline-none text-sm cursor-pointer transition-all
+      ${error ? "border-red-500 bg-red-50" : "border-slate-200 focus:bg-white focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500"}`}
     {...props}
   >
     <option value="">-- Pilih {label} --</option>
-    {options.map((opt) => (
-      <option key={opt.value} value={opt.value}>
-        {opt.label}
+    {options.map((option) => (
+      <option key={option.value} value={option.value}>
+        {option.label}
       </option>
     ))}
   </select>
@@ -354,463 +579,83 @@ const AdditionalRow = ({
   onRemove,
   canRemove,
   errors,
-}) => (
-  <div
-    className={`p-6 rounded-2xl border transition-all space-y-4 shadow-sm 
-    ${Object.keys(errors).some((k) => k.endsWith(`_${index}`)) ? "bg-red-50/30 border-red-200" : "bg-emerald-50/40 border-emerald-100"}`}
-  >
-    <div className="flex justify-between items-center">
-      <span className="text-xs font-black text-emerald-700 uppercase tracking-widest bg-emerald-100 px-3 py-1 rounded-full">
-        Pecahan #{index + 1}
-      </span>
-      {canRemove && (
-        <button
-          type="button"
-          onClick={() => onRemove(index)}
-          className="p-1.5 bg-white text-red-500 rounded-full shadow-sm hover:bg-red-50 border border-red-100"
-        >
-          <HiOutlineX size={16} />
-        </button>
-      )}
-    </div>
+}) => {
+  const hasRowError = Object.keys(errors).some((key) =>
+    key.endsWith(`_${index}`),
+  );
 
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-      <InputField
-        icon={FaRegUser}
-        name="newName"
-        label="Nama Baru"
-        value={item.newName}
-        onChange={(e) => onChange(e, index)}
-        error={errors[`extra_newName_${index}`]}
-      />
-      <InputField
-        icon={FaFileSignature}
-        name="certificate"
-        label="Sertifikat"
-        value={item.certificate}
-        onChange={(e) => onChange(e, index)}
-        error={errors[`extra_certificate_${index}`]}
-      />
-      <InputField
-        icon={FaMapMarkerAlt}
-        name="landWide"
-        label="Luas Tanah"
-        type="number"
-        value={item.landWide}
-        onChange={(e) => onChange(e, index)}
-        error={errors[`extra_landWide_${index}`]}
-      />
-      <InputField
-        icon={FaBuilding}
-        name="buildingWide"
-        label="Luas Bangunan"
-        type="number"
-        value={item.buildingWide}
-        onChange={(e) => onChange(e, index)}
-        error={errors[`extra_buildingWide_${index}`]}
-      />
-    </div>
+  return (
+    <div
+      className={`p-6 rounded-[2rem] border-2 transition-all space-y-5 
+      ${hasRowError ? "bg-red-50/30 border-red-100" : "bg-white border-slate-100 hover:border-emerald-100 shadow-sm"}`}
+    >
+      <div className="flex justify-between items-center">
+        <div className="flex items-center gap-3">
+          <span className="w-7 h-7 flex items-center justify-center bg-slate-800 text-white rounded-full text-[10px] font-bold">
+            {index + 1}
+          </span>
+          <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest">
+            Detail Objek Pecahan
+          </h4>
+        </div>
+        {canRemove && (
+          <button
+            type="button"
+            onClick={() => onRemove(index)}
+            className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
+            title="Hapus baris"
+          >
+            <HiOutlineX size={18} />
+          </button>
+        )}
+      </div>
 
-    <div className="w-full">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <InputField
+          icon={FaRegUser}
+          name="newName"
+          label="Nama Baru"
+          value={item.newName}
+          onChange={(event) => onChange(event, index)}
+          error={errors[`extra_newName_${index}`]}
+        />
+        <InputField
+          icon={FaFileSignature}
+          name="certificate"
+          label="No. Sertifikat"
+          value={item.certificate}
+          onChange={(event) => onChange(event, index)}
+          error={errors[`extra_certificate_${index}`]}
+        />
+        <InputField
+          icon={FaMapMarkerAlt}
+          name="landWide"
+          label="Luas Tanah"
+          type="number"
+          value={item.landWide}
+          onChange={(event) => onChange(event, index)}
+          error={errors[`extra_landWide_${index}`]}
+        />
+        <InputField
+          icon={FaHome}
+          name="buildingWide"
+          label="Luas Bangunan"
+          type="number"
+          value={item.buildingWide}
+          onChange={(event) => onChange(event, index)}
+          error={errors[`extra_buildingWide_${index}`]}
+        />
+      </div>
+
       <InputField
         as="textarea"
-        icon={FaRegStickyNote}
         name="note"
-        label="Catatan khusus pecahan (Opsional)"
+        label="Catatan khusus objek ini (Opsional)"
         value={item.note}
-        onChange={(e) => onChange(e, index)}
-        style={{ minHeight: "80px" }}
+        onChange={(event) => onChange(event, index)}
       />
     </div>
-  </div>
-);
+  );
+};
 
 export default CreateTask;
-
-// import React, { useState, useCallback, useContext, useId } from "react";
-// import { useNavigate } from "react-router-dom";
-// import toast from "react-hot-toast";
-// import {
-//   FaHashtag,
-//   FaRegUser,
-//   FaMapMarkerAlt,
-//   FaHome,
-//   FaBuilding,
-//   FaFileSignature,
-// } from "react-icons/fa";
-// import { FaClipboardList } from "react-icons/fa6";
-
-// import DashboardLayout from "../../components/layouts/DashboardLayout";
-// import UserContext from "../../context/UserContexts";
-// import axiosInstance from "../../utils/axiosInstance";
-// import { API_PATHS } from "../../utils/apiPaths";
-// import { TITLE_OPTIONS, SUBDISTRICT_OPTIONS } from "../../utils/data";
-// import { toTitle, toUpper, toNumber } from "../../utils/string";
-
-// const CreateTask = () => {
-//   const { user } = useContext(UserContext);
-//   const navigate = useNavigate();
-
-//   const idForTitleSelect = useId();
-
-//   const [title, setTitle] = useState("");
-//   const [mainData, setMainData] = useState({
-//     nopel: "",
-//     nop: "",
-//     oldName: "",
-//     address: "",
-//     village: "",
-//     subdistrict: "",
-//   });
-//   const [additionalData, setAdditionalData] = useState([
-//     { newName: "", landWide: "", buildingWide: "", certificate: "" },
-//   ]);
-//   const [globalNote, setGlobalNote] = useState("");
-//   const [isSubmitting, setIsSubmitting] = useState(false);
-
-//   const handleMainChange = useCallback((event) => {
-//     const { name, value } = event.target;
-//     setMainData((prev) => ({ ...prev, [name]: value }));
-//   }, []);
-
-//   const handleAdditionalChange = useCallback((event, index) => {
-//     const { name, value } = event.target;
-//     setAdditionalData((prev) => {
-//       const updated = [...prev];
-//       updated[index] = { ...updated[index], [name]: value };
-//       return updated;
-//     });
-//   }, []);
-
-//   const handleAddRow = () => {
-//     setAdditionalData((prev) => [
-//       ...prev,
-//       { newName: "", landWide: "", buildingWide: "", certificate: "" },
-//     ]);
-//   };
-
-//   const handleRemoveRow = (indexToRemove) => {
-//     setAdditionalData((prev) =>
-//       prev.filter((_, index) => index !== indexToRemove)
-//     );
-//   };
-
-//   const handleSubmit = async (event) => {
-//     event.preventDefault();
-
-//     if (!title) return toast.error("Pilih jenis permohonan terlebih dahulu.");
-
-//     const incomplete = Object.entries(mainData).find(([_, value]) => !value);
-//     if (incomplete)
-//       return toast.error("Semua data utama wajib diisi dengan lengkap.");
-
-//     for (const [index, item] of additionalData.entries()) {
-//       if (
-//         !item.newName ||
-//         !item.landWide ||
-//         !item.buildingWide ||
-//         !item.certificate
-//       ) {
-//         return toast.error(
-//           `Lengkapi semua bagian pada data tambahan pecahan ke-${index + 1}.`
-//         );
-//       }
-//     }
-
-//     const formatted = {
-//       title,
-//       mainData: {
-//         nopel: toUpper(mainData.nopel),
-//         nop: mainData.nop,
-//         oldName: toTitle(mainData.oldName),
-//         address: toTitle(mainData.address),
-//         village: toTitle(mainData.village),
-//         subdistrict: mainData.subdistrict,
-//       },
-//       additionalData: additionalData.map((item) => ({
-//         newName: toTitle(item.newName),
-//         landWide: toNumber(item.landWide),
-//         buildingWide: toNumber(item.buildingWide),
-//         certificate: toUpper(item.certificate),
-//       })),
-//       globalNote,
-//     };
-
-//     setIsSubmitting(true);
-//     try {
-//       const response = await axiosInstance.post(
-//         API_PATHS.TASK.CREATE_TASK,
-//         formatted
-//       );
-//       if (response?.data) {
-//         toast.success("Berkas berhasil dibuat.");
-//       }
-//       navigate("/manage-task/task");
-//     } catch (error) {
-//       console.error("❌ createTask Error:", error.message);
-//       const backendMsg = error?.response?.data?.message;
-//       toast.error(backendMsg || "Gagal membuat berkas permohonan.");
-//     } finally {
-//       setIsSubmitting(false);
-//     }
-//   };
-
-//   return (
-//     <DashboardLayout activeMenu="Create Task">
-//       <div className="w-full grid grid-cols-1 lg:grid-cols-4 gap-8">
-//         {/* === FORM KIRI === */}
-//         <div className="lg:col-span-3 bg-white/70 backdrop-blur-md rounded-3xl shadow-lg p-8 lg:p-10 border border-emerald-200/50">
-//           <h2 className="text-2xl md:text-3xl font-extrabold text-emerald-800 mb-8 flex flex-col gap-2">
-//             <span className="flex items-center gap-3">
-//               <FaClipboardList className="text-emerald-600 w-7 h-7" />
-//               Buat Permohonan Baru
-//             </span>
-//             <span className="block w-24 h-1 bg-gradient-to-r from-lime-400 to-emerald-500 rounded-full"></span>
-//           </h2>
-
-//           <form onSubmit={handleSubmit} noValidate className="space-y-8">
-//             {/* Jenis Permohonan */}
-//             <div>
-//               <select
-//                 id={idForTitleSelect}
-//                 value={title}
-//                 onChange={(e) => setTitle(e.target.value)}
-//                 className="w-full rounded-lg border border-emerald-300 py-2 pl-2 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white/80 transition"
-//                 required
-//               >
-//                 <option value="">Jenis Permohonan</option>
-//                 {TITLE_OPTIONS.map((opt) => (
-//                   <option key={opt.value} value={opt.value}>
-//                     {opt.label}
-//                   </option>
-//                 ))}
-//               </select>
-//             </div>
-
-//             {/* Data Utama */}
-//             <SectionTitle text="Data Utama" />
-//             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-//               <InputField
-//                 label="NOPEL"
-//                 name="nopel"
-//                 value={mainData.nopel}
-//                 onChange={handleMainChange}
-//                 required
-//                 Icon={FaHashtag}
-//               />
-//               <InputField
-//                 label="NOP"
-//                 name="nop"
-//                 value={mainData.nop}
-//                 onChange={handleMainChange}
-//                 required
-//                 Icon={FaFileSignature}
-//               />
-//               <InputField
-//                 label="Nama Lama"
-//                 name="oldName"
-//                 value={mainData.oldName}
-//                 onChange={handleMainChange}
-//                 required
-//                 Icon={FaRegUser}
-//               />
-//               <InputField
-//                 label="Alamat"
-//                 name="address"
-//                 value={mainData.address}
-//                 onChange={handleMainChange}
-//                 required
-//                 Icon={FaMapMarkerAlt}
-//               />
-//               <InputField
-//                 label="Kelurahan / Desa"
-//                 name="village"
-//                 value={mainData.village}
-//                 onChange={handleMainChange}
-//                 required
-//                 Icon={FaHome}
-//               />
-//               <div>
-//                 <select
-//                   name="subdistrict"
-//                   value={mainData.subdistrict}
-//                   onChange={handleMainChange}
-//                   className="w-full rounded-lg border border-emerald-300 py-2 pl-2 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white/80 transition"
-//                   required
-//                 >
-//                   <option value="">Pilih Kecamatan</option>
-//                   {SUBDISTRICT_OPTIONS.map((opt) => (
-//                     <option key={opt.value} value={opt.value}>
-//                       {opt.label}
-//                     </option>
-//                   ))}
-//                 </select>
-//               </div>
-//             </div>
-
-//             {/* Data Tambahan */}
-//             <SectionTitle text="Data Tambahan" />
-//             <div className="space-y-5">
-//               {additionalData.map((item, index) => (
-//                 <div
-//                   key={index}
-//                   className="p-5 border border-emerald-200 rounded-2xl bg-gradient-to-br from-emerald-50 to-lime-50 relative"
-//                 >
-//                   <h4 className="font-medium text-emerald-800 mb-3 flex items-center gap-2">
-//                     <FaBuilding className="text-emerald-600" />
-//                     Pecahan ke {index + 1}
-//                   </h4>
-
-//                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-//                     <InputField
-//                       label="Nama Baru"
-//                       name="newName"
-//                       value={item.newName}
-//                       onChange={(e) => handleAdditionalChange(e, index)}
-//                       required
-//                       Icon={FaRegUser}
-//                     />
-//                     <InputField
-//                       label="Luas Tanah (m²)"
-//                       name="landWide"
-//                       type="number"
-//                       value={item.landWide}
-//                       onChange={(e) => handleAdditionalChange(e, index)}
-//                       required
-//                       Icon={FaMapMarkerAlt}
-//                     />
-//                     <InputField
-//                       label="Luas Bangunan (m²)"
-//                       name="buildingWide"
-//                       type="number"
-//                       value={item.buildingWide}
-//                       onChange={(e) => handleAdditionalChange(e, index)}
-//                       required
-//                       Icon={FaBuilding}
-//                     />
-//                     <InputField
-//                       label="Nomor Sertifikat"
-//                       name="certificate"
-//                       value={item.certificate}
-//                       onChange={(e) => handleAdditionalChange(e, index)}
-//                       required
-//                       Icon={FaFileSignature}
-//                     />
-//                   </div>
-
-//                   {additionalData.length > 1 && (
-//                     <button
-//                       type="button"
-//                       onClick={() => handleRemoveRow(index)}
-//                       className="absolute top-3 right-4 text-emerald-600 hover:text-red-500 text-sm transition"
-//                     >
-//                       Hapus
-//                     </button>
-//                   )}
-//                 </div>
-//               ))}
-
-//               <button
-//                 type="button"
-//                 onClick={handleAddRow}
-//                 className="text-sm text-emerald-600 hover:underline font-medium"
-//               >
-//                 + Tambah Subjek Pajak
-//               </button>
-//             </div>
-
-//             {/* Catatan */}
-//             <SectionTitle text="Catatan (Opsional)" />
-//             <textarea
-//               value={globalNote}
-//               onChange={(e) => setGlobalNote(e.target.value)}
-//               placeholder="Tambahkan catatan umum di sini..."
-//               className="min-h-[100px] w-full rounded-lg border border-emerald-300 py-2 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white/80 transition"
-//             />
-
-//             {/* Tombol Submit */}
-//             <div className="text-right pt-4">
-//               <button
-//                 type="submit"
-//                 disabled={isSubmitting}
-//                 className="bg-gradient-to-r from-lime-400 to-emerald-500 text-white px-8 py-3 rounded-lg shadow-md hover:from-lime-500 hover:to-emerald-600 disabled:opacity-60 transition text-base font-semibold"
-//               >
-//                 {isSubmitting ? "Menyimpan..." : "Buat Permohonan"}
-//               </button>
-//             </div>
-//           </form>
-//         </div>
-
-//         {/* === PANEL KANAN === */}
-//         <div className="bg-gradient-to-br from-emerald-100 to-lime-50 rounded-3xl shadow-lg p-6 lg:p-8 text-emerald-900 border border-emerald-200/50 backdrop-blur-md">
-//           <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
-//             🌿 Cara Membuat Task
-//           </h3>
-//           <ul className="space-y-3 text-sm leading-relaxed list-disc list-inside">
-//             <li>Pilih jenis permohonan yang sesuai.</li>
-//             <li>Isi semua data utama dengan lengkap dan benar.</li>
-//             <li>Tambahkan data tambahan untuk setiap subjek pajak.</li>
-//             <li>Gunakan huruf kapital pada NOP dan NOPEL untuk kejelasan.</li>
-//             <li>
-//               Klik <strong>Buat Permohonan</strong> setelah semua data diisi.
-//             </li>
-//             <li>Sistem akan mengarahkan ke halaman daftar berkas Anda.</li>
-//           </ul>
-
-//           <div className="mt-6 p-4 bg-white/80 rounded-lg shadow-sm border border-emerald-200 text-sm">
-//             <p className="font-medium text-emerald-700 mb-1">Tips:</p>
-//             <p>
-//               Jika jenis task adalah <strong>pengaktifan</strong>, maka sistem
-//               akan otomatis mengeset tahap awal hingga <em>“Dikirim”</em>.
-//             </p>
-//           </div>
-//         </div>
-//       </div>
-//     </DashboardLayout>
-//   );
-// };
-
-// // === Komponen Kecil ===
-// const InputField = ({
-//   label,
-//   name,
-//   value,
-//   onChange,
-//   required,
-//   type = "text",
-//   Icon,
-// }) => {
-//   const excluded = ["title", "subdistrict", "globalNote"];
-//   const showIcon = Icon && !excluded.includes(name);
-
-//   return (
-//     <div className="w-full">
-//       <div className="relative flex items-center">
-//         {showIcon && (
-//           <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-500 pointer-events-none">
-//             <Icon className="w-5 h-5" />
-//           </span>
-//         )}
-//         <input
-//           type={type}
-//           name={name}
-//           value={value}
-//           onChange={onChange}
-//           placeholder={label}
-//           required={required}
-//           className={`w-full rounded-lg border border-emerald-300 ${
-//             showIcon ? "pl-12" : "pl-3"
-//           } py-2 text-sm placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white/80 transition`}
-//         />
-//       </div>
-//     </div>
-//   );
-// };
-
-// const SectionTitle = ({ text }) => (
-//   <h3 className="text-lg font-semibold text-emerald-800 border-b border-emerald-200 pb-1 mb-2">
-//     {text}
-//   </h3>
-// );
-
-// export default CreateTask;

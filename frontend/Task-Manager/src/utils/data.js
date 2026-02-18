@@ -6,6 +6,8 @@ import {
 } from "react-icons/lu";
 import { RiFolderHistoryLine } from "react-icons/ri";
 
+const createOptions = (arr) => Object.freeze(arr.map((val) => ({ label: val, value: val })));
+
 // 1. Roles Definition
 export const ROLE = {
   ADMIN: "admin",
@@ -98,13 +100,11 @@ export const SUBDISTRICT_OPTIONS = Object.freeze(
   ),
 );
 
-export const TITLE_OPTIONS = Object.freeze(
-  [
-    "Pengaktifan",
-    "Mutasi Habis Update",
-    "Mutasi Habis Reguler",
-    "Mutasi Sebagian",
-    "Pembetulan",
-    "Objek Pajak Baru",
-  ].map((val) => ({ label: val, value: val })),
-);
+export const TITLE_OPTIONS = createOptions([
+  "Pengaktifan",
+  "Mutasi Habis Update",
+  "Mutasi Habis Reguler",
+  "Mutasi Sebagian",
+  "Pembetulan",
+  "Objek Pajak Baru",
+]);

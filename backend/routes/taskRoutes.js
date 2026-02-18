@@ -1,31 +1,35 @@
 const express = require("express");
-const {
-  createTask,
-  approveTask,
-  updateTask,
-  deleteTask,
-  getAdminDashboardStats,
-  getUserDashboardStats,
-  getAllTasks,
-  getTaskById,
-  getAllUserPerformance,
-} = require("../controllers/taskControllers");
+const router = express.Router();
+const taskController = require("../controllers/taskControllers");
 const { protect } = require("../middlewares/authMiddlewares");
 
-const router = express.Router();
+// Terapkan middleware 'protect' ke seluruh route di file ini 
+// agar tidak perlu menulisnya satu per satu di setiap baris
+router.use(protect);
 
-// Tambahkan route sesuai kontroller
-router.get("/", protect, getAllTasks);
-router.get("/admin-dashboard", protect, getAdminDashboardStats);
-router.get("/user-dashboard", protect, getUserDashboardStats);
-router.get("/user-performance", protect, getAllUserPerformance);
-router.get("/:taskId", protect, getTaskById);
+/**
+ * --- ROUTES UNTUK DASHBOARD & STATISTIK ---
+ */
+router.get("/stats/admin", taskController.getAdminDashboardStats);
+router.get("/stats/user", taskController.getUserDashboardStats);
+router.get("/stats/performance", taskController.getAllUserPerformance);
 
-router.post("/create", protect, createTask);
+/**
+ * --- ROUTES UTAMA (CRUD & ACTIONS) ---
+ */
 
-router.patch("/approve/:taskId", protect, approveTask);
-router.patch("/update/:taskId", protect, updateTask);
+// 1. Ambil semua task & Buat task baru
+router.route("/")
+  .get(taskController.getAllTasks)
+  .post(taskController.createTask);
 
-router.delete("/delete/:taskId", protect, deleteTask);
+// 2. Operasi berdasarkan ID Task
+router.route("/:taskId")
+  .get(taskController.getTaskById)
+  .patch(taskController.updateTask)   // Menggunakan PATCH untuk update data
+  .delete(taskController.deleteTask);
+
+// 3. Aksi Khusus: Approval/Status
+router.patch("/:taskId/approve", taskController.updateTaskApproval);
 
 module.exports = router;

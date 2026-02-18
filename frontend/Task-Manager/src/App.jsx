@@ -28,7 +28,7 @@ const TeamPerformance = React.lazy(() =>
   import("./pages/Admin/TeamPerformance")
 );
 const CreateTask = React.lazy(() => import("./pages/Task/CreateTask"));
-const TaskDetailPublic = React.lazy(() => import("./pages/Detail/TaskDetail"));
+const TaskDetail = React.lazy(() => import("./pages/Detail/TaskDetail"));
 const UpdateTask = React.lazy(() => import("./pages/Task/UpdateTask"));
 const ExportSummary = React.lazy(() =>
   import("./pages/Detail/RecommendationLatter")
@@ -172,7 +172,7 @@ const App = () => {
                 path="/document/recommendation-latter"
                 element={<ExportSummary />}
               />
-              <Route path="/task-detail/:id" element={<TaskDetailPublic />} />
+              <Route path="/task-detail/:id" element={<TaskDetail />} />
             </Route>
 
             {/* 404 fallback */}
