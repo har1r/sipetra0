@@ -4,7 +4,7 @@ const {
   exportReport,
   getVerifiedTasksForExport,
   addAttachmentToTask,
-  getExportedReports,
+  getBatchReportsHistory,
   addAttachmentToReport,
 } = require("../controllers/reportControllers");
 
@@ -14,7 +14,7 @@ const router = express.Router();
 router.post("/export-selected", protect, exportReport);
 router.get("/daftar-surat-pengantar", protect, getVerifiedTasksForExport);
 router.post("/add-attachment/:taskId", protect, addAttachmentToTask);
-router.get("/exported-reports", protect, getExportedReports);
+router.get("/exported-reports", protect, getBatchReportsHistory);
 router.put("/attachment/:reportId", protect, addAttachmentToReport);
 
 module.exports = router;

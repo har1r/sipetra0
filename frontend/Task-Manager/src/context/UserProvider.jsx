@@ -1,4 +1,10 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+} from "react";
 import axiosInstance from "../utils/axiosInstance";
 import { API_PATHS } from "../utils/apiPaths";
 import UserContext from "./UserContexts";
@@ -9,43 +15,45 @@ const UserProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  /* ==========================================================
-   * 🧩 1. Hapus data user dari state dan storage
-   * ========================================================== */
+  // Menggunakan ref untuk melacak status autentikasi terakhir agar sinkronisasi tab lebih cerdas
+  const lastTokenRef = useRef(localStorage.getItem("token"));
+
+  /* Clear User & Storage */
   const clearUser = useCallback((reason = null) => {
     setUser(null);
     localStorage.removeItem("token");
     sessionStorage.removeItem(USER_CACHE_KEY);
-    if (reason) console.warn("User cleared:", reason);
+    lastTokenRef.current = null;
+    if (reason && process.env.NODE_ENV === "development") {
+      console.warn("User cleared:", reason);
+    }
   }, []);
 
-  /* ==========================================================
-   * 🧩 2. Update user + simpan ke cache sessionStorage
-   * ========================================================== */
+  /* Update User (Internal & Manual) */
   const updateUser = useCallback((userData) => {
     if (!userData) return;
-
-    // 🧠 Normalisasi agar format selalu konsisten
     const normalizedUser = userData.user ?? userData;
 
     setUser(normalizedUser);
-    sessionStorage.setItem(
-      USER_CACHE_KEY,
-      JSON.stringify({
-        data: normalizedUser,
-        time_series: Date.now(),
-      })
-    );
+    try {
+      sessionStorage.setItem(
+        USER_CACHE_KEY,
+        JSON.stringify({
+          data: normalizedUser,
+          time_series: Date.now(),
+        }),
+      );
+    } catch (eror) {
+      console.error("Failed to cache user session", e);
+    }
   }, []);
 
-  /* ==========================================================
-   * 🧩 3. Ambil profil user dari backend
-   * ========================================================== */
+  /* Refresh Profile dari API */
   const refreshUser = useCallback(
     async (signal) => {
       const token = localStorage.getItem("token");
       if (!token) {
-        clearUser("Token tidak ditemukan");
+        clearUser("Token not found");
         return null;
       }
 
@@ -53,98 +61,96 @@ const UserProvider = ({ children }) => {
         const res = await axiosInstance.get(API_PATHS.AUTH.GET_USER_PROFILE, {
           signal,
         });
-
-        // ✅ Struktur respons backend:
-        // { message, user: { id, name, email, role, createdAt, updatedAt } }
         const profile = res?.data?.user;
 
-        if (!profile) {
-          clearUser("Data profil tidak valid");
-          return null;
-        }
+        if (!profile) throw new Error("Invalid profile data");
 
-        // Simpan user ke state & cache
-        setUser(profile);
-        sessionStorage.setItem(
-          USER_CACHE_KEY,
-          JSON.stringify({ data: profile, time_series: Date.now() })
-        );
-
+        updateUser(profile);
         return profile;
       } catch (error) {
-        if (error?.name === "CanceledError" || error?.code === "ERR_CANCELED")
-          return null;
+        if (axiosInstance.isCancel(error)) return null;
 
-        // Token tidak valid atau kedaluwarsa
         if (error?.response?.status === 401) {
-          clearUser("Token tidak valid atau kedaluwarsa");
+          clearUser("Session expired");
         } else {
-          console.error("❌ Gagal memuat profil user:", error);
+          console.error("❌ Failed to fetch user profile:", error);
         }
         return null;
       }
     },
-    [clearUser]
+    [clearUser, updateUser],
   );
 
-  /* ==========================================================
-   * 🧩 4. Jalankan saat aplikasi pertama kali dibuka
-   * ========================================================== */
+  /* Initialization & Tab Sync */
   useEffect(() => {
     const ctrl = new AbortController();
 
-    const bootstrap = async () => {
+    const initAuth = async () => {
       const token = localStorage.getItem("token");
+
       if (!token) {
         setLoading(false);
         return;
       }
 
-      // 💨 Gunakan cache sementara agar UI tidak flicker
-      const cachedProfile = sessionStorage.getItem(USER_CACHE_KEY);
-      if (cachedProfile) {
-        const cached = JSON.parse(cachedProfile);
-        if (cached?.data) setUser(cached.data);
+      // 1. Tampilkan data dari cache sessionStorage (Instant UI)
+      const cached = sessionStorage.getItem(USER_CACHE_KEY);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (parsed?.data) setUser(parsed.data);
+        } catch (e) {
+          sessionStorage.removeItem(USER_CACHE_KEY);
+        }
       }
 
-      // Tunggu refresh selesai baru matikan loading
+      // 2. Validasi data ke server (Background Refresh)
       await refreshUser(ctrl.signal);
       setLoading(false);
     };
 
-    bootstrap();
+    initAuth();
 
-    // 🪄 Sinkronisasi antar-tab
-    const onStorage = (e) => {
+    // Sinkronisasi antar-tab yang lebih efisien
+    const handleStorageChange = (e) => {
       if (e.key === "token") {
-        const hasToken = !!localStorage.getItem("token");
-        if (!hasToken) clearUser("Token dihapus dari tab lain");
-        else refreshUser(ctrl.signal);
+        const newToken = e.newValue;
+
+        // Hanya bertindak jika token benar-benar berubah (mencegah loop)
+        if (newToken !== lastTokenRef.current) {
+          lastTokenRef.current = newToken;
+          if (!newToken) {
+            clearUser("Logged out from another tab");
+          } else {
+            refreshUser(); // Ambil profil user baru yang login di tab lain
+          }
+        }
       }
     };
-    window.addEventListener("storage", onStorage);
 
+    window.addEventListener("storage", handleStorageChange);
     return () => {
       ctrl.abort();
-      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("storage", handleStorageChange);
     };
   }, [clearUser, refreshUser]);
 
-  /* ==========================================================
-   * 🧩 5. Memoized context value agar efisien
-   * ========================================================== */
-  const value = useMemo(
+  /* Context Value */
+  const contextValue = useMemo(
     () => ({
       user,
       loading,
       updateUser,
       clearUser,
       refreshUser,
+      isAuthenticated: !!user, // Tambahan helper agar di UI lebih mudah cek status
     }),
-    [user, loading, updateUser, clearUser, refreshUser]
+    [user, loading, updateUser, clearUser, refreshUser],
   );
 
-  return <UserContext.Provider value={value}>{children}</UserContext.Provider>;
+  return (
+    <UserContext.Provider value={contextValue}>{children}</UserContext.Provider>
+  );
 };
 
 export default UserProvider;

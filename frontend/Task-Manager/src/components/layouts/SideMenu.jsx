@@ -1,31 +1,19 @@
 import React, { useContext, useMemo, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import UserContext from "../../context/UserContexts";
-import { ADMIN_MENU, USER_MENU } from "../../utils/data";
+// Import getMenuByRole, kita tidak butuh ADMIN_MENU & USER_MENU lagi secara langsung
+import { getMenuByRole } from "../../utils/data";
 import { HiOutlineLogout } from "react-icons/hi";
-
-const CAN_ACCESS_PATH_BY_ROLE = {
-  "/task/create": new Set(["penginput", "admin"]),
-};
 
 const SideMenu = ({ isMobile = false, onClose }) => {
   const { user, clearUser } = useContext(UserContext);
   const navigate = useNavigate();
   const location = useLocation();
 
-  const sideMenuData = useMemo(() => {
-    if (!user) return [];
-    return (user.role || "").toLowerCase() === "admin" ? ADMIN_MENU : USER_MENU;
-  }, [user]);
-
-  const filteredMenu = useMemo(() => {
-    if (!user) return [];
-    const role = (user.role || "").toLowerCase();
-    return sideMenuData.filter((item) => {
-      const allowedSet = CAN_ACCESS_PATH_BY_ROLE[item.path];
-      return !allowedSet || allowedSet.has(role);
-    });
-  }, [sideMenuData, user]);
+  // 1. Ambil menu secara dinamis berdasarkan role dari logic terpusat di data.js
+  const menuItems = useMemo(() => {
+    return getMenuByRole(user?.role);
+  }, [user?.role]);
 
   const onMenuClick = useCallback(
     (path) => {
@@ -35,6 +23,7 @@ const SideMenu = ({ isMobile = false, onClose }) => {
         clearUser();
         navigate("/login", { replace: true });
       } else {
+        // Navigasi ke path, replace jika sudah di path yang sama
         navigate(path, { replace: location.pathname === path });
       }
       if (onClose) onClose();
@@ -78,19 +67,25 @@ const SideMenu = ({ isMobile = false, onClose }) => {
         </div>
       </div>
 
-      {/* 📂 Navigasi Utama */}
+      {/* Navigasi Utama */}
       <nav className="flex-1 px-4 space-y-1 overflow-y-auto">
         <p className="px-4 mb-2 text-[11px] font-semibold text-slate-400 uppercase tracking-widest">
           Menu Utama
         </p>
-        {filteredMenu.map((item) => {
+
+        {menuItems.map((item) => {
+          // Menggunakan array match untuk menentukan status aktif (lebih akurat)
           const isActive = Array.isArray(item.match)
-            ? item.match.some((p) => location.pathname.startsWith(p))
+            ? item.match.some(
+                (p) =>
+                  location.pathname === p ||
+                  location.pathname.startsWith(p + "/"),
+              )
             : location.pathname === item.path;
 
           return (
             <button
-              key={item.label}
+              key={item.id} // Gunakan id dari registry untuk key yang lebih stabil
               onClick={() => onMenuClick(item.path)}
               className={`group flex w-full items-center gap-3 px-4 py-3 rounded-xl text-sm transition-all duration-200 ${
                 isActive
@@ -118,7 +113,7 @@ const SideMenu = ({ isMobile = false, onClose }) => {
         })}
       </nav>
 
-      {/* 🚪 Footer - Logout */}
+      {/* Footer - Logout */}
       <div className="p-4 mt-auto border-t border-slate-100 shrink-0 bg-white">
         <button
           onClick={() => onMenuClick("logout")}

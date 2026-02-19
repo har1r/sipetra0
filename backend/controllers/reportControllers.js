@@ -333,9 +333,7 @@ const exportReport = async (req, res) => {
   }
 };
 
-// @Deskripsi: Menampilkan datar surat pengantar/rekomendasi
-// @Route: GET /api/reports/daftar-surat-pengantar
-// @Access: Private (semua user role dan admin)
+// @Deskripsi: Menampilkan daftar tugas yang sudah melewati tahap diteliti/verifikasi untuk dibuatkan surat pengantar
 const getVerifiedTasksForExport = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
@@ -398,11 +396,16 @@ const getVerifiedTasksForExport = async (req, res) => {
       },
       tasks: tasks.map((task) => ({
         ...task,
-        displayBatchId: task.reportId ? task.reportId.batchId : "Belum Ada Batch",
+        displayBatchId: task.reportId
+          ? task.reportId.batchId
+          : "Belum Ada Batch",
       })),
     });
   } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    return res.status(500).json({
+      success: false,
+      message: "Gagal mengambil data untuk export.",
+    });
   }
 };
 
@@ -444,22 +447,37 @@ const addAttachmentToTask = async (req, res) => {
   }
 };
 
-const getExportedReports = async (req, res) => {
+const getBatchReportsHistory = async (req, res) => {
   try {
-    const { batchId, status, startDate, endDate } = req.query;
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = parseInt(req.query.limit) || 10;
+    const skip = (page - 1) * limit;
+    const {
+      batchId,
+      status,
+      startDate,
+      endDate,
+      sortOrder = "desc",
+    } = req.query;
+
     let filters = {};
 
     if (batchId) {
-      filters.batchId = new RegExp(batchId.trim(), "i");
+      const safeBatchId = batchId.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      filters.batchId = { $regex: safeBatchId, $options: "i" };
     }
 
     if (status) {
-      filters.status = status;
+      filters.status = status.toUpperCase();
     }
 
     if (startDate || endDate) {
       filters.createdAt = {};
-      if (startDate) filters.createdAt.$gte = new Date(startDate);
+      if (startDate) {
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        filters.createdAt.$gte = start;
+      }
       if (endDate) {
         const end = new Date(endDate);
         end.setHours(23, 59, 59, 999);
@@ -467,45 +485,64 @@ const getExportedReports = async (req, res) => {
       }
     }
 
-    const reports = await mongoose
-      .model("Report")
-      .find(filters)
-      .populate({
-        path: "tasks",
-        select: "mainData.nopel mainData.nop title additionalData",
-      })
-      .populate("generatedBy", "name")
-      .sort({ createdAt: -1 });
+    const sortingDirection = sortOrder === "asc" ? 1 : -1;
 
-    // FORMAT RESPONSE YANG DISESUAIKAN
+    const [totalData, reports] = await Promise.all([
+      mongoose.model("Report").countDocuments(filters),
+      mongoose
+        .model("Report")
+        .find(filters)
+        // TAMBAHKAN additionalData ke dalam populate agar bisa dihitung
+        .populate("tasks", "mainData.nopel mainData.nop title additionalData")
+        .populate("generatedBy", "name")
+        .sort({ createdAt: sortingDirection })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+    ]);
+
+    const totalPages = Math.ceil(totalData / limit);
+
     const formattedReports = reports.map((report) => ({
-      // Gunakan _id agar konsisten dengan MongoDB dan React key
       _id: report._id,
       batchId: report.batchId,
       tanggalCetak: report.createdAt,
       admin: report.generatedBy?.name || "Sistem",
-      totalTasks: report.tasks?.length || 0, // Sesuai kolom di tabel
+
+      // LOGIKA BARU: Menghitung total entri data tambahan dari seluruh tasks
+      totalTasks:
+        report.tasks?.reduce((acc, task) => {
+          return acc + (task.additionalData?.length || 0);
+        }, 0) || 0,
+
       status: report.status,
-
-      // WAJIB DISERTAKAN: Agar tidak undefined saat di-update
       driveLink: report.driveLink || "",
-
       daftarNopel:
-        report.tasks?.map((t) => t.mainData?.nopel).join(", ") || "-",
-      // pdfUrl tetap disertakan jika Anda masih menggunakannya
+        report.tasks
+          ?.map((t) => t.mainData?.nopel)
+          .filter(Boolean)
+          .join(", ") || "-",
       pdfUrl: report.pdfUrl || null,
     }));
 
     return res.status(200).json({
       success: true,
-      count: formattedReports.length,
+      pagination: {
+        totalData,
+        totalPages,
+        currentPage: page,
+        limit,
+        hasNextPage: page < totalPages,
+        hasPrevPage: page > 1,
+      },
       reports: formattedReports,
     });
   } catch (error) {
-    console.error("Error Get Exported Reports:", error);
-    return res
-      .status(500)
-      .json({ message: "Gagal memuat data laporan: " + error.message });
+    console.error("Error Get Batch Reports:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Gagal memuat data laporan: " + error.message,
+    });
   }
 };
 
@@ -551,6 +588,6 @@ module.exports = {
   exportReport,
   getVerifiedTasksForExport,
   addAttachmentToTask,
-  getExportedReports,
+  getBatchReportsHistory,
   addAttachmentToReport,
 };

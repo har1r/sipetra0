@@ -22,36 +22,30 @@ import { API_PATHS } from "../../utils/apiPaths";
 import axiosInstance from "../../utils/axiosInstance";
 import { formatDateId } from "../../utils/formatDateId";
 
-const CustomBarChart = React.lazy(() =>
-  import("../../components/charts/CustomBarChart")
+const CustomBarChart = React.lazy(
+  () => import("../../components/charts/CustomBarChart"),
 );
-const TaskListTable = React.lazy(() =>
-  import("../../components/tabels/TaskListTable")
+const CustomGraphChart = React.lazy(
+  () => import("../../components/charts/CustomGraphChart"),
+);
+const TaskListTable = React.lazy(
+  () => import("../../components/tabels/TaskListTable"),
 );
 
-// ======================================
-// Helpers
-// ======================================
 const CHART_COLORS = ["#8D51FF", "#00B8DB", "#7BCE08", "#FFBB28", "#FF1F57"];
 
 const transformToChartData = (obj) =>
   obj ? Object.entries(obj).map(([label, count]) => ({ label, count })) : [];
 
-// ======================================
-// Main Component
-// ======================================
-const UserDashboard = () => {
+const Dashboard = () => {
   UseUserAuth();
   const { user } = useContext(UserContext);
   const navigate = useNavigate();
 
-  // ======================================
-  // States
-  // ======================================
   const [dashboardData, setDashboardData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [page, setPage] = useState(1);
-  const [searchNopel, setSearchNopel] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
   const currentYear = new Date().getFullYear();
   const [yearFilter, setYearFilter] = useState(currentYear);
   const abortControllerRef = useRef(null);
@@ -59,32 +53,25 @@ const UserDashboard = () => {
   const recordLimit = 5;
   const todayLabel = useMemo(
     () => formatDateId(new Date(), { withWeekday: true }),
-    []
+    [],
   );
 
-  const availableYears = useMemo(
-    () => Array.from({ length: 3 }, (_, i) => currentYear - i),
-    [currentYear]
-  );
+  const availableYears = useMemo(() => {
+    return Array.from({ length: 3 }, (_, i) => currentYear - i);
+  }, [currentYear]);
 
-  // ======================================
-  // Derived Data
-  // ======================================
   const {
     stats = {},
-    approvedTasks = [],
-    approvedTotal = 0,
-    stage = "-",
+    overdueTasks = [],
+    overdueTotal = 0,
+    weeklyStats = [],
   } = dashboardData || {};
 
   const totalPages = useMemo(
-    () => Math.ceil(approvedTotal / recordLimit) || 1,
-    [approvedTotal, recordLimit]
+    () => Math.ceil(overdueTotal / recordLimit) || 1,
+    [overdueTotal, recordLimit],
   );
 
-  // ======================================
-  // Fetch Function
-  // ======================================
   const fetchDashboardData = useCallback(
     async (pageNumber = 1) => {
       abortControllerRef.current?.abort();
@@ -94,16 +81,16 @@ const UserDashboard = () => {
       try {
         setIsLoading(true);
         const { data } = await axiosInstance.get(
-          API_PATHS.TASK.GET_USER_DASHBOARD_DATA,
+          API_PATHS.TASK.GET_DASHBOARD_DATA,
           {
             params: {
               page: pageNumber,
               limit: recordLimit,
-              nopel: searchNopel || undefined,
+              nopel: searchTerm || undefined,
               year: yearFilter || undefined,
             },
             signal: controller.signal,
-          }
+          },
         );
 
         setDashboardData(data ?? {});
@@ -111,48 +98,38 @@ const UserDashboard = () => {
       } catch (error) {
         if (
           !["CanceledError", "AbortError", "ERR_CANCELED"].includes(
-            error?.name || error?.code
+            error?.name || error?.code,
           )
         ) {
-          console.error("Error fetching user dashboard:", error);
-          toast.error("Gagal memuat data dashboard");
+          console.error("Dashboard fetch error:", error);
         }
       } finally {
         setIsLoading(false);
       }
     },
-    [recordLimit, searchNopel, yearFilter]
+    [recordLimit, searchTerm, yearFilter],
   );
 
-  // ======================================
-  // Effects
-  // ======================================
   useEffect(() => {
     fetchDashboardData(1);
     return () => abortControllerRef.current?.abort();
   }, [fetchDashboardData]);
 
-  // ======================================
-  // Render
-  // ======================================
   return (
     <DashboardLayout activeMenu="Dashboard">
-      <div className="min-h-screen ">
+      <div className="min-h-screen">
         {/* Header */}
-        <header className="my-6 px-3 md:px-0">
+        <header className="mb-8 bg-white/70 backdrop-blur-md p-6 rounded-3xl shadow-md border border-emerald-200/50">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
-              <h1 className="text-2xl md:text-3xl font-semibold text-slate-900">
+              <h1 className="text-3xl font-extrabold text-emerald-800">
                 Selamat datang, {user?.name}
               </h1>
-              <p className="text-sm text-gray-500">{todayLabel}</p>
-              <span className="inline-block mt-2 text-xs font-medium text-slate-600 bg-slate-100 px-2 py-0.5 rounded-full">
-                Tahap: {String(stage).toUpperCase()}
-              </span>
+              <p className="text-sm text-emerald-600">{todayLabel}</p>
             </div>
 
             <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-slate-600">
+              <label className="text-sm font-medium text-emerald-700">
                 Tahun:
               </label>
               <select
@@ -161,7 +138,7 @@ const UserDashboard = () => {
                   setYearFilter(e.target.value);
                   fetchDashboardData(1);
                 }}
-                className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 shadow-sm focus:border-indigo-500 focus:ring-2 focus:ring-indigo-400 transition-all cursor-pointer hover:border-indigo-400"
+                className="rounded-xl border border-emerald-300 bg-white/80 px-3 py-2 text-sm text-emerald-800 shadow-sm focus:ring-2 focus:ring-emerald-500 transition"
               >
                 {availableYears.map((year) => (
                   <option key={year} value={year}>
@@ -174,7 +151,7 @@ const UserDashboard = () => {
           </div>
 
           {/* Summary Cards */}
-          <section className="mt-6 grid grid-cols-2 sm:grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
+          <section className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-5">
             <InfoCard
               label="Total Permohonan"
               value={stats.totalTasks ?? 0}
@@ -199,10 +176,10 @@ const UserDashboard = () => {
         </header>
 
         {/* Charts */}
-        <main className="px-3 md:px-0 grid grid-cols-1 md:grid-cols-2 gap-6 my-6">
+        <main className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Suspense fallback={<CardSkeleton />}>
-            <section className="bg-white rounded-2xl shadow-sm hover:shadow-md p-5">
-              <h2 className="text-lg font-medium mb-4 text-slate-800">
+            <section className="bg-white/70 backdrop-blur-md rounded-2xl shadow-lg p-6 border border-emerald-200 hover:shadow-xl transition">
+              <h2 className="text-xl font-semibold text-emerald-800 mb-3">
                 Permohonan Per Jenis
               </h2>
               {stats.tasksPerTitle ? (
@@ -211,14 +188,16 @@ const UserDashboard = () => {
                   colors={CHART_COLORS}
                 />
               ) : (
-                <div className="py-8 text-center text-sm text-slate-500">
-                  Belum ada data untuk ditampilkan.
+                <div className="py-10 text-center text-emerald-600 text-sm">
+                  Belum ada data.
                 </div>
               )}
             </section>
+          </Suspense>
 
-            <section className="bg-white rounded-2xl shadow-sm hover:shadow-md p-5">
-              <h2 className="text-lg font-medium mb-4 text-slate-800">
+          <Suspense fallback={<CardSkeleton />}>
+            <section className="bg-white/70 backdrop-blur-md rounded-2xl shadow-lg p-6 border border-emerald-200 hover:shadow-xl transition">
+              <h2 className="text-xl font-semibold text-emerald-800 mb-3">
                 Permohonan Per Kecamatan
               </h2>
               {stats.tasksPerSubdistrict ? (
@@ -227,43 +206,57 @@ const UserDashboard = () => {
                   colors={CHART_COLORS}
                 />
               ) : (
-                <div className="py-8 text-center text-sm text-slate-500">
-                  Belum ada data untuk ditampilkan.
+                <div className="py-10 text-center text-emerald-600 text-sm">
+                  Belum ada data.
                 </div>
               )}
             </section>
           </Suspense>
 
-          {/* Approved Task List */}
-          <Suspense fallback={<TableSkeleton />}>
-            <section className="bg-white rounded-2xl shadow-sm hover:shadow-md p-5 md:col-span-2 relative">
-              {isLoading && (
-                <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/60 backdrop-blur-sm rounded-2xl">
-                  <div className="h-6 w-6 animate-spin rounded-full border-4 border-indigo-500 border-t-transparent" />
+          <Suspense fallback={<CardSkeleton />}>
+            <section className="md:col-span-2 bg-white/70 backdrop-blur-md rounded-2xl shadow-lg p-6 border border-emerald-200 hover:shadow-xl transition">
+              <h2 className="text-xl font-semibold text-emerald-800 mb-3">
+                Tren Permohonan (12 Minggu Terakhir)
+              </h2>
+              {weeklyStats.length > 0 ? (
+                <CustomGraphChart data={weeklyStats} showLegend />
+              ) : (
+                <div className="py-10 text-center text-emerald-600 text-sm">
+                  Belum ada data.
                 </div>
               )}
+            </section>
+          </Suspense>
+
+          <Suspense fallback={<TableSkeleton />}>
+            <section className="md:col-span-2 relative bg-white/70 backdrop-blur-md rounded-2xl shadow-lg p-6 border border-emerald-200 hover:shadow-xl transition">
+              {isLoading && (
+                <div className="absolute inset-0 flex items-center justify-center bg-white/50 backdrop-blur-sm rounded-2xl">
+                  <div className="h-6 w-6 animate-spin rounded-full border-4 border-emerald-500 border-t-transparent"></div>
+                </div>
+              )}
+
               <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-medium text-slate-800">
-                  Permohonan Disetujui
+                <h2 className="text-xl font-semibold text-emerald-800">
+                  Permohonan Jatuh Tempo
                 </h2>
                 <button
-                  onClick={() => navigate("/user/tasks")}
-                  className="flex items-center gap-1 text-indigo-600 hover:text-indigo-700 text-sm font-medium"
+                  onClick={() => navigate("/admin/tasks")}
+                  className="flex items-center gap-1 text-emerald-600 hover:text-emerald-700 text-sm font-medium"
                 >
-                  Lihat Semua
-                  <LuArrowRight className="text-base" />
+                  Lihat Semua <LuArrowRight />
                 </button>
               </div>
 
-              {approvedTasks.length > 0 ? (
+              {overdueTasks.length > 0 ? (
                 <>
                   <TaskListTable
-                    tableData={approvedTasks}
+                    tableData={overdueTasks}
                     page={page}
                     limit={recordLimit}
-                    searchNopel={searchNopel}
+                    searchNopel={searchTerm}
                     onSearchNopel={(val) => {
-                      setSearchNopel(val);
+                      setSearchTerm(val);
                       fetchDashboardData(1);
                     }}
                   />
@@ -275,8 +268,8 @@ const UserDashboard = () => {
                   />
                 </>
               ) : (
-                <div className="py-8 text-center text-sm text-slate-500">
-                  Belum ada data disetujui pada tahap ini.
+                <div className="py-10 text-center text-emerald-600 text-sm">
+                  Tidak ada data jatuh tempo.
                 </div>
               )}
             </section>
@@ -287,4 +280,4 @@ const UserDashboard = () => {
   );
 };
 
-export default UserDashboard;
+export default Dashboard;
