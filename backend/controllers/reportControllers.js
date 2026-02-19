@@ -169,16 +169,28 @@ const exportReport = async (req, res) => {
     tableY += rowHeight;
     doc.moveDown(2);
 
+    doc.x = doc.page.margins.left;
+
     doc.font("Helvetica").fontSize(11);
     doc.text(
       `Sehubungan dengan hal ini, bahwa berkas permohonan ${jenisPelayanan} SPPT PBB tersebut sudah melalui proses penelitian/verifikasi dan diarsipkan sebagaimana mestinya (data terlampir).`,
-      { align: "justify" },
+      {
+        align: "justify",
+        width: contentWidth, // Pastikan memberikan lebar agar justify bekerja sempurna
+      },
     );
-    doc.moveDown(2);
+
+    doc.moveDown(1); // Gunakan 1 atau 2 sesuai kebutuhan estetika
+
     doc.text(
       "Demikian surat rekomendasi ini kami sampaikan, atas perhatiannya diucapkan terimakasih.",
-      { align: "justify" },
+      {
+        align: "justify",
+        width: contentWidth,
+      },
     );
+    // -------------------------
+
     doc.moveDown(2);
 
     const footerX = doc.page.margins.left + contentWidth / 2 + 40;
@@ -326,31 +338,42 @@ const exportReport = async (req, res) => {
 // @Access: Private (semua user role dan admin)
 const getVerifiedTasksForExport = async (req, res) => {
   try {
-    // 1. Ambil query parameter untuk pagination dan pencarian
-    // Default page = 1, limit = 10
     const page = parseInt(req.query.page) || 1;
     const limit = 10;
     const skip = (page - 1) * limit;
-    const { nopel } = req.query;
+    const { nopel, startDate, endDate, sortOrder = "desc" } = req.query;
 
     const filters = {
-      // Hanya ambil stage yang sudah melewati 'diteliti'
       currentStage: {
         $in: ["diarsipkan", "dikirim", "diperiksa", "selesai"],
       },
     };
 
     if (nopel) {
-      filters["mainData.nopel"] = new RegExp(nopel.trim(), "i");
+      filters["mainData.nopel"] = { $regex: nopel.trim(), $options: "i" };
     }
 
-    // 2. Hitung total data untuk keperluan metadata pagination
+    if (startDate || endDate) {
+      filters.updatedAt = {};
+      if (startDate) {
+        const start = new Date(startDate);
+        start.setHours(0, 0, 0, 0);
+        filters.updatedAt.$gte = start; // Mongoose akan otomatis handle ini sebagai Date
+      }
+      if (endDate) {
+        const end = new Date(endDate);
+        end.setHours(23, 59, 59, 999);
+        filters.updatedAt.$lte = end;
+      }
+    }
+
+    const sortingDirection = sortOrder === "asc" ? 1 : -1;
+
     const totalData = await Task.countDocuments(filters);
     const totalPages = Math.ceil(totalData / limit);
 
-    // 3. Jalankan Query dengan Pagination dan Populate
     const tasks = await Task.find(filters)
-      .sort({ updatedAt: -1 }) // Urutkan terbaru
+      .sort({ updatedAt: sortingDirection }) // Urutkan terbaru
       .skip(skip) // Lewati data halaman sebelumnya
       .limit(limit) // Batasi hanya 10 data
       .populate({
@@ -358,9 +381,9 @@ const getVerifiedTasksForExport = async (req, res) => {
         select: "batchId", // Ambil nomor batch saja
       })
       .select(
-        "_id title mainData attachments currentStage updatedAt additionalData reportId",
+        "_id title mainData attachments updatedAt additionalData reportId",
       )
-      .lean();
+      .lean(); // Gunakan lean untuk performa lebih baik karena hanya baca data
 
     return res.status(200).json({
       success: true,
@@ -371,16 +394,11 @@ const getVerifiedTasksForExport = async (req, res) => {
         limit,
         hasNextPage: page < totalPages,
         hasPrevPage: page > 1,
+        activeSort: sortOrder === "asc" ? "terlama" : "terbaru",
       },
-      tasks: tasks.map((t) => ({
-        ...t,
-        // Jika reportId ada hasil populate, ambil batchId-nya
-        displayBatchId: t.reportId ? t.reportId.batchId : "Belum Ada Batch",
-        mainData: {
-          ...t.mainData,
-          oldlandWide: t.mainData?.oldlandWide ?? 0,
-          oldbuildingWide: t.mainData?.oldbuildingWide ?? 0,
-        },
+      tasks: tasks.map((task) => ({
+        ...task,
+        displayBatchId: task.reportId ? task.reportId.batchId : "Belum Ada Batch",
       })),
     });
   } catch (error) {

@@ -195,7 +195,7 @@ const TaskRow = ({ task, index, isExpanded, onToggle, onApprove }) => {
             className="bg-slate-50/50 border-l-4 border-emerald-500 animate-fadeIn shadow-inner"
           >
             <td className="px-4 py-3 text-center text-[10px] font-black text-slate-300 italic">
-              {index}.{pIdx + 1}
+              {index}.{pIdx + 2}
             </td>
             <td colSpan={2} className="px-4 py-3">
               <div className="text-[11px] font-black text-slate-500 uppercase italic">
