@@ -15,7 +15,6 @@ const UserProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Menggunakan ref untuk melacak status autentikasi terakhir agar sinkronisasi tab lebih cerdas
   const lastTokenRef = useRef(localStorage.getItem("token"));
 
   /* Clear User & Storage */

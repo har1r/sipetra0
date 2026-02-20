@@ -1,13 +1,15 @@
-import React, { useContext, useId, useState } from "react";
+import React, { useContext, useId, useState, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import toast from "react-hot-toast";
+
+// Icons
 import { IoPersonSharp } from "react-icons/io5";
-import { MdEmail } from "react-icons/md";
+import { MdEmail, MdToken } from "react-icons/md";
 import { RiLockPasswordFill } from "react-icons/ri";
-import { MdToken } from "react-icons/md";
+import { HiOutlineAdjustmentsHorizontal } from "react-icons/hi2";
 
 import AuthLayout from "../../components/layouts/AuthLayout";
-import Input from "../../components/inputs/Input";
+import Input from "../../components/input/Input";
 import axiosInstance from "../../utils/axiosInstance";
 import { validateEmail } from "../../utils/helper";
 import UserContext from "../../context/UserContexts";
@@ -17,7 +19,7 @@ const stageToRoleMap = {
   Diinput: "penginput",
   Ditata: "penata",
   Diteliti: "peneliti",
-  Diarsipkan: "pengarsip",
+  Arsip: "pengarsip",
   Dikirim: "pengirim",
   Selesai: "pengecek",
 };
@@ -26,18 +28,29 @@ const SignUp = () => {
   const navigate = useNavigate();
   const { updateUser } = useContext(UserContext);
 
+  // ID & Refs
   const nameId = useId();
   const emailId = useId();
   const passId = useId();
   const adminTokenId = useId();
   const stageId = useId();
 
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [adminInviteToken, setAdminInviteToken] = useState("");
-  const [selectedStage, setSelectedStage] = useState("");
+  const formRef = useRef(null);
+
+  // States
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    password: "",
+    adminInviteToken: "",
+    selectedStage: "",
+  });
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
 
   const getInitials = (fullName) => {
     if (!fullName) return "";
@@ -51,15 +64,15 @@ const SignUp = () => {
     e.preventDefault();
 
     const safe = {
-      name: name.trim(),
-      email: email.trim().toLowerCase(),
-      password: password.trim(),
-      adminInviteToken: adminInviteToken.trim(),
-      selectedStage: selectedStage.trim(),
+      name: formData.name.trim(),
+      email: formData.email.trim().toLowerCase(),
+      password: formData.password.trim(),
+      adminInviteToken: formData.adminInviteToken.trim(),
+      selectedStage: formData.selectedStage.trim(),
     };
 
     if (!safe.name || !safe.email || !safe.password) {
-      toast.error("Nama, email, dan password wajib diisi.");
+      toast.error("Mohon lengkapi data diri Anda.");
       return;
     }
 
@@ -74,7 +87,7 @@ const SignUp = () => {
     } else if (safe.selectedStage) {
       role = stageToRoleMap[safe.selectedStage] || "";
     } else {
-      toast.error("Pilih tahapan tanggung jawab atau masukkan token admin.");
+      toast.error("Pilih tanggung jawab atau gunakan token admin.");
       return;
     }
 
@@ -90,25 +103,24 @@ const SignUp = () => {
 
       const response = await axiosInstance.post(
         API_PATHS.AUTH.REGISTER,
-        payload
+        payload,
       );
       const { message, token, user } = response?.data || {};
-      if (!token || !user)
-        throw new Error("Token atau data pengguna tidak ditemukan.");
+
+      if (!token || !user) throw new Error("Data respons tidak lengkap.");
 
       const userWithInitials = { ...user, initials: getInitials(user.name) };
       localStorage.setItem("token", token);
       updateUser(userWithInitials);
-      toast.success(message || "Registrasi berhasil!");
+      toast.success(message || "Akun berhasil dibuat!");
 
       const isAdmin = user.role?.toLowerCase() === "admin";
       navigate(isAdmin ? "/admin/dashboard" : "/user/dashboard", {
         replace: true,
       });
     } catch (error) {
-      console.error("❌ Register Error:", error.message);
       const backendMsg = error?.response?.data?.message;
-      toast.error(backendMsg || "Gagal register. Coba lagi nanti.");
+      toast.error(backendMsg || "Gagal mendaftar. Silakan coba lagi.");
     } finally {
       setIsSubmitting(false);
     }
@@ -116,90 +128,160 @@ const SignUp = () => {
 
   return (
     <AuthLayout>
-      <div className="w-full max-w-sm mx-auto px-3 md:px-0">
-        {/* === Heading === */}
-        <h2 className="text-3xl md:text-4xl font-extrabold text-emerald-700 mb-2 text-center md:text-left leading-snug">
-          Daftar Akun Baru
-        </h2>
-        <p className="text-emerald-600/80 text-sm mb-6 text-center md:text-left">
-          Isi data berikut untuk membuat akun Anda.
-        </p>
+      <div className="w-full">
+        {/* === Heading Section === */}
+        <header className="text-center md:text-left mb-8">
+          <h2 className="text-3xl md:text-4xl font-bold text-slate-800 mb-3 tracking-tight">
+            Daftar <span className="text-emerald-600">SIPETRA</span>
+          </h2>
+          <p className="text-slate-500 text-base leading-relaxed">
+            Mulai kelola sistem informasi pelayanan secara rapi dan terpantau.
+          </p>
+        </header>
 
-        {/* === Form Register === */}
+        {/* === Form Section === */}
         <form onSubmit={handleRegister} noValidate className="space-y-4">
-          <Input
-            id={nameId}
-            name="name"
-            type="text"
-            placeholder="Nama lengkap"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-            icon={<IoPersonSharp size={20} />}
-          />
-
-          <Input
-            id={emailId}
-            name="email"
-            type="email"
-            placeholder="Alamat email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            icon={<MdEmail size={20} />}
-          />
-
-          <Input
-            id={passId}
-            name="password"
-            type="password"
-            placeholder="Kata sandi"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            icon={<RiLockPasswordFill size={20} />}
-          />
-
-          <Input
-            id={adminTokenId}
-            name="adminInviteToken"
-            type="text"
-            placeholder="Token admin (opsional)"
-            value={adminInviteToken}
-            onChange={(e) => setAdminInviteToken(e.target.value)}
-            icon={<MdToken size={20} />}
-          />
-
-          {!adminInviteToken && (
-            <select
-              id={stageId}
-              className="w-full rounded-lg border border-emerald-200 bg-white/70 text-slate-700 p-2 text-sm focus:ring-2 focus:ring-emerald-400 focus:border-emerald-300 transition-all duration-200"
-              value={selectedStage}
-              onChange={(e) => setSelectedStage(e.target.value)}
+          <div className="space-y-1">
+            <label
+              htmlFor={nameId}
+              className="text-sm font-medium text-slate-700 ml-1"
             >
-              <option value="">-- Pilih tahapan tanggung jawab --</option>
-              {Object.keys(stageToRoleMap).map((stage) => (
-                <option key={stage} value={stage}>
-                  {stage}
-                </option>
-              ))}
-            </select>
+              Nama Lengkap
+            </label>
+            <Input
+              id={nameId}
+              name="name"
+              placeholder="Masukkan nama lengkap"
+              value={formData.name}
+              onChange={handleChange}
+              icon={<IoPersonSharp className="text-emerald-500/70" size={18} />}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label
+              htmlFor={emailId}
+              className="text-sm font-medium text-slate-700 ml-1"
+            >
+              Alamat Email
+            </label>
+            <Input
+              id={emailId}
+              name="email"
+              type="email"
+              placeholder="nama@email.com"
+              value={formData.email}
+              onChange={handleChange}
+              icon={<MdEmail className="text-emerald-500/70" size={18} />}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label
+              htmlFor={passId}
+              className="text-sm font-medium text-slate-700 ml-1"
+            >
+              Kata Sandi
+            </label>
+            <Input
+              id={passId}
+              name="password"
+              type="password"
+              placeholder="Min. 8 karakter"
+              value={formData.password}
+              onChange={handleChange}
+              icon={
+                <RiLockPasswordFill className="text-emerald-500/70" size={18} />
+              }
+            />
+          </div>
+
+          <div className="relative py-2">
+            <div className="absolute inset-0 flex items-center">
+              <span className="w-full border-t border-slate-100"></span>
+            </div>
+            <div className="relative flex justify-center text-[10px] uppercase tracking-widest text-slate-400 bg-white px-2 w-max mx-auto">
+              Peran & Akses
+            </div>
+          </div>
+
+          <div className="space-y-1">
+            <label
+              htmlFor={adminTokenId}
+              className="text-sm font-medium text-slate-700 ml-1"
+            >
+              Token Admin (Opsional)
+            </label>
+            <Input
+              id={adminTokenId}
+              name="adminInviteToken"
+              placeholder="Masukkan token jika ada"
+              value={formData.adminInviteToken}
+              onChange={handleChange}
+              icon={<MdToken className="text-emerald-500/70" size={18} />}
+            />
+          </div>
+
+          {!formData.adminInviteToken && (
+            <div className="space-y-1">
+              <label
+                htmlFor={stageId}
+                className="text-sm font-medium text-slate-700 ml-1"
+              >
+                Tanggung Jawab
+              </label>
+              <div className="relative flex items-center">
+                <div className="absolute left-3.5 text-emerald-500/70 pointer-events-none">
+                  <HiOutlineAdjustmentsHorizontal size={20} />
+                </div>
+                <select
+                  id={stageId}
+                  name="selectedStage"
+                  value={formData.selectedStage}
+                  onChange={handleChange}
+                  className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-emerald-100 bg-white/70 text-slate-700 text-[15px] focus:outline-none focus:ring-2 focus:ring-emerald-100 focus:border-emerald-400 transition-all appearance-none cursor-pointer"
+                >
+                  <option value="">Pilih tahapan tanggung jawab</option>
+                  {Object.keys(stageToRoleMap).map((stage) => (
+                    <option key={stage} value={stage}>
+                      {stage}
+                    </option>
+                  ))}
+                </select>
+                <div className="absolute right-4 pointer-events-none border-l pl-2 border-slate-100 text-slate-400">
+                  <span className="text-[10px]">▼</span>
+                </div>
+              </div>
+            </div>
           )}
 
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="w-full bg-gradient-to-r from-emerald-500 via-green-500 to-lime-500 text-white font-semibold py-2.5 rounded-lg shadow-md hover:brightness-110 transition-all duration-300 disabled:opacity-60"
-          >
-            {isSubmitting ? "Mendaftarkan..." : "Daftar"}
-          </button>
+          {/* === Action Buttons === */}
+          <div className="pt-4 space-y-4">
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full bg-[#064e3b] hover:bg-[#053f30] text-white font-semibold py-3.5 rounded-xl shadow-md transition-all duration-200 active:scale-[0.98] disabled:opacity-70 flex justify-center items-center gap-2"
+            >
+              {isSubmitting ? (
+                <>
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Mendaftarkan...
+                </>
+              ) : (
+                "Daftar Akun"
+              )}
+            </button>
 
-          <Link
-            to="/login"
-            className="block w-full text-center border border-emerald-500 text-emerald-600 font-semibold py-2.5 rounded-lg hover:bg-emerald-50 transition-all duration-300"
-          >
-            Masuk Ke Akun
-          </Link>
+            <p className="text-center text-slate-600 text-sm">
+              Sudah memiliki akun?{" "}
+              <Link
+                to="/login"
+                className="text-emerald-600 font-bold hover:text-emerald-700 transition-colors"
+              >
+                Masuk Sekarang
+              </Link>
+            </p>
+          </div>
         </form>
       </div>
     </AuthLayout>

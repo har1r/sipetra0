@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import DashboardLayout from "../../components/layouts/DashboardLayout";
-import ReportHistoryTable from "../../components/inputs/ReportHistoryTable";
+import ReportHistoryTable from "../../components/input/ReportHistoryTable";
 import axiosInstance from "../../utils/axiosInstance";
 import { API_PATHS } from "../../utils/apiPaths";
 import { formatDateId } from "../../utils/formatDateId";
