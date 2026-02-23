@@ -1,17 +1,24 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, {
+  useState,
+  useEffect,
+  useCallback,
+  forwardRef,
+  useImperativeHandle,
+} from "react";
 import axiosInstance from "../../utils/axiosInstance";
 import { API_PATHS } from "../../utils/apiPaths";
 import { formatDateId } from "../../utils/formatDateId";
-import { FaHistory, FaLink, FaFileInvoice, FaFolderOpen } from "react-icons/fa";
+import { FaLink, FaFileInvoice, FaFolderOpen } from "react-icons/fa";
 import {
   HiOutlineSearch,
   HiOutlineInbox,
   HiOutlineChevronLeft,
   HiOutlineChevronRight,
+  HiOutlinePrinter,
 } from "react-icons/hi";
 import toast from "react-hot-toast";
 
-const ReportHistoryTable = () => {
+const ReportHistoryTable = forwardRef(({ onPrint }, ref) => {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(false);
   const [filterBatch, setFilterBatch] = useState("");
@@ -21,6 +28,7 @@ const ReportHistoryTable = () => {
     totalData: 0,
   });
 
+  // --- REQ 1: GET ALL REPORTS (Untuk List Tabel) ---
   const fetchReports = useCallback(
     async (page = 1) => {
       setLoading(true);
@@ -35,6 +43,7 @@ const ReportHistoryTable = () => {
             },
           },
         );
+        console.log("API Response for Report History:", res.data.reports);
         setReports(res.data.reports || []);
         setPagination(
           res.data.pagination || {
@@ -52,10 +61,51 @@ const ReportHistoryTable = () => {
     [filterBatch],
   );
 
+  useImperativeHandle(ref, () => ({
+    refresh: () => fetchReports(1),
+  }));
+
   useEffect(() => {
     const timer = setTimeout(() => fetchReports(1), filterBatch ? 500 : 0);
     return () => clearTimeout(timer);
   }, [filterBatch, fetchReports]);
+
+  // --- REQ 2 & 3: GET BY ID & GENERATE PDF ---
+  const handleDownloadPDF = async (reportId) => {
+    const toastId = toast.loading("Menyiapkan dokumen PDF...");
+    try {
+      const response = await axiosInstance.post(
+        API_PATHS.REPORTS.EXPORT_SELECTED_TASKS(reportId),
+        {}, // Data body kosong (karena ID ada di URL params)
+        {
+          responseType: "blob", // Sangat Penting: Agar Axios tidak memproses data sebagai JSON
+          headers: {
+            Accept: "application/pdf",
+          },
+        },
+      );
+
+      // Verifikasi jika yang kembali bukan JSON error (opsional tapi disarankan)
+      if (response.data.type === "application/json") {
+        // Jika backend mengirim JSON (berarti error), konversi blob ke text
+        const text = await response.data.text();
+        const errorData = JSON.parse(text);
+        throw new Error(errorData.message);
+      }
+
+      const file = new Blob([response.data], { type: "application/pdf" });
+      const fileURL = URL.createObjectURL(file);
+
+      // Buka di tab baru
+      window.open(fileURL, "_blank");
+
+      toast.success("PDF berhasil dibuka!", { id: toastId });
+      setTimeout(() => URL.revokeObjectURL(fileURL), 100);
+    } catch (err) {
+      console.error("Print Error:", err);
+      toast.error(err.message || "Gagal mencetak PDF.", { id: toastId });
+    }
+  };
 
   const handleSetBatchLink = async (reportId, currentLink) => {
     const newLink = window.prompt(
@@ -185,14 +235,26 @@ const ReportHistoryTable = () => {
                       )}
                     </td>
                     <td className="px-6 py-5 text-right">
-                      <button
-                        onClick={() =>
-                          handleSetBatchLink(report._id, report.driveLink)
-                        }
-                        className="p-2.5 rounded-xl bg-slate-50 text-slate-400 border border-slate-200 hover:text-emerald-500 hover:border-emerald-500 hover:bg-white hover:shadow-md transition-all active:scale-90"
-                      >
-                        <FaLink size={14} />
-                      </button>
+                      <div className="flex justify-end gap-2">
+                        {/* TOMBOL CETAK PDF (MEMANGGIL FUNGSI LOCAL) */}
+                        <button
+                          onClick={() => handleDownloadPDF(report._id)}
+                          className="p-2.5 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100 hover:bg-emerald-600 hover:text-white hover:shadow-md transition-all active:scale-90"
+                          title="Cetak PDF"
+                        >
+                          <HiOutlinePrinter size={16} />
+                        </button>
+
+                        <button
+                          onClick={() =>
+                            handleSetBatchLink(report._id, report.driveLink)
+                          }
+                          className="p-2.5 rounded-xl bg-slate-50 text-slate-400 border border-slate-200 hover:text-blue-500 hover:border-blue-500 hover:bg-white hover:shadow-md transition-all active:scale-90"
+                          title="Tautkan Link Drive"
+                        >
+                          <FaLink size={14} />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -242,6 +304,6 @@ const ReportHistoryTable = () => {
       </div>
     </div>
   );
-};
+});
 
 export default ReportHistoryTable;

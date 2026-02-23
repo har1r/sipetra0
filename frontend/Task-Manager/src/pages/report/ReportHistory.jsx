@@ -9,7 +9,6 @@ import {
   HiOutlineSearch,
   HiOutlineRefresh,
   HiOutlineInbox,
-  HiOutlinePrinter,
   HiOutlineLink,
   HiOutlineExternalLink,
   HiFilter,
@@ -36,7 +35,7 @@ const FilterInput = ({ label, icon: Icon, ...props }) => (
 
 const ReportHistory = () => {
   const [tasks, setTasks] = useState([]);
-  const [isLoading, setIsLoading] = useState(false); // Diubah dari loading ke isLoading
+  const [isLoading, setIsLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
 
@@ -53,13 +52,14 @@ const ReportHistory = () => {
   const [totalPages, setTotalPages] = useState(1);
 
   const ctrlRef = useRef(null);
+  const historyTableRef = useRef(null);
 
   const fetchTasks = useCallback(async () => {
     ctrlRef.current?.abort();
     const ctrl = new AbortController();
     ctrlRef.current = ctrl;
 
-    setIsLoading(true); // Menggunakan setIsLoading
+    setIsLoading(true);
     try {
       const params = {
         page: currentPage,
@@ -90,7 +90,7 @@ const ReportHistory = () => {
         toast.error("Gagal sinkronisasi data");
       }
     } finally {
-      setIsLoading(false); // Menggunakan setIsLoading
+      setIsLoading(false);
     }
   }, [appliedFilters, currentPage]);
 
@@ -106,7 +106,7 @@ const ReportHistory = () => {
 
   const resetFilter = () => {
     const init = { nopel: "", startDate: "", endDate: "", sortOrder: "desc" };
-    setIsLoading(true); // Memicu putaran icon segera saat reset diklik
+    setIsLoading(true);
     setFilterDraft(init);
     setAppliedFilters(init);
     setCurrentPage(1);
@@ -126,40 +126,31 @@ const ReportHistory = () => {
     );
   };
 
-  const handleExportPDF = async () => {
+  const handleCreateBatch = async () => {
     if (selectedIds.length === 0)
       return toast.error("Pilih minimal satu berkas.");
+
     setExporting(true);
-    const toastId = toast.loading("Sedang memproses PDF...");
+    const toastId = toast.loading("Sedang membuat nomor pengantar...");
+
     try {
       const response = await axiosInstance.post(
-        API_PATHS.REPORTS.EXPORT_SELECTED_TASKS,
+        API_PATHS.REPORTS.CREATE_REPORT,
         { selectedTaskIds: selectedIds },
-        { responseType: "blob" },
       );
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement("a");
-      link.href = url;
-      link.setAttribute("download", `PENGANTAR_${Date.now()}.pdf`);
-      document.body.appendChild(link);
-      link.click();
-      toast.success("PDF berhasil diunduh", { id: toastId });
+
+      toast.success(
+        response.data.message || "Batch pengantar berhasil dibuat.",
+        { id: toastId },
+      );
+
       setSelectedIds([]);
       fetchTasks();
+      // Me-refresh tabel riwayat di komponen anak
+      if (historyTableRef.current?.refresh) historyTableRef.current.refresh();
     } catch (err) {
-      let errorMessage = "Terjadi kesalahan saat mengekspor PDF.";
-
-      if (err.response && err.response.data instanceof Blob) {
-        // Ubah blob kembali ke teks secara asinkron
-        const reader = new FileReader();
-        reader.onload = () => {
-          const responseData = JSON.parse(reader.result);
-          toast.error(responseData.message || errorMessage, { id: toastId });
-        };
-        reader.readAsText(err.response.data);
-        return; // Keluar agar tidak menabrak toast di bawah
-      }
-
+      const errorMessage =
+        err.response?.data?.message || "Terjadi kesalahan saat membuat batch.";
       toast.error(errorMessage, { id: toastId });
     } finally {
       setExporting(false);
@@ -200,11 +191,11 @@ const ReportHistory = () => {
               Reset Filter
             </button>
             <button
-              onClick={handleExportPDF}
+              onClick={handleCreateBatch}
               disabled={selectedIds.length === 0 || exporting}
               className="flex items-center gap-2 px-6 py-3 bg-slate-800 text-white rounded-2xl text-[11px] font-bold shadow-lg hover:bg-slate-900 transition-all disabled:opacity-50"
             >
-              <HiOutlinePrinter className="w-4 h-4" />
+              <HiOutlineLink className="w-4 h-4" />
               Generate Batch ({selectedIds.length})
             </button>
           </div>
@@ -357,10 +348,12 @@ const ReportHistory = () => {
                       </td>
                       <td className="px-4 py-4 text-center">
                         {task.reportId ? (
-                          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-bold uppercase">
-                            <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-                            {task.displayBatchId}
-                          </span>
+                          <div className="flex flex-col items-center gap-1">
+                            <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-bold uppercase">
+                              <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+                              {task.displayBatchId}
+                            </span>
+                          </div>
                         ) : (
                           <span className="text-[10px] font-bold text-slate-300 uppercase tracking-widest italic">
                             Antrean
@@ -443,7 +436,7 @@ const ReportHistory = () => {
             </h2>
           </div>
           <div className="bg-white rounded-[1.5rem] p-2 border border-slate-200 shadow-sm overflow-hidden">
-            <ReportHistoryTable />
+            <ReportHistoryTable ref={historyTableRef} />
           </div>
         </div>
       </div>

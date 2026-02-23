@@ -1,7 +1,8 @@
 const mongoose = require("mongoose");
 const PDFDocument = require("pdfkit");
 const Task = require("../models/Task");
-const { createBatchReport } = require("../services/createBatchReport"); // Gunakan fungsi baru
+const Report = require("../models/Report");
+// const { createReport } = require("../services/createBatchReport"); // Gunakan fungsi baru
 const path = require("path");
 const LOGO_PATH = path.resolve(__dirname, "./assets/logo-kab.png");
 
@@ -12,33 +13,131 @@ const fmtDateID = (d = new Date()) =>
     year: "numeric",
   }).format(d);
 
-const generateReport = async (req, res) => {
+// @Deskripsi: Membuat no surat pengantar berdasarkan permohonan yang dipilih contoh: 973/001-UPT.PD.WIL.IV/2026
+const createReport = async (req, res) => {
   try {
     const user = req.user;
     const { selectedTaskIds } = req.body; // selectedTaksIds berisi id dari permohonan yang dipilih untuk dibuatkan surat pengantar
-    
-    if (!user) return res.status(401).json({ message: "Silahkan login terlebih dahulu." });
-    if (!["admin", "peneliti"].includes(user.role)) return res.status(403).json({ message: "Anda tidak memiliki izin untuk mengakses fitur ini."});
-    if (!Array.isArray(selectedTaskIds) || selectedTaskIds.length === 0) return res.status(400).json({ message: "Silahkan pilih minimal satu permohonan untuk dibuatkan surat pengantar." });
+
+    if (!user)
+      return res
+        .status(401)
+        .json({ message: "Silahkan login terlebih dahulu." });
+    if (!["admin", "peneliti"].includes(user.role))
+      return res.status(403).json({
+        message: "Anda tidak memiliki izin untuk mengakses fitur ini.",
+      });
+    if (!Array.isArray(selectedTaskIds) || selectedTaskIds.length === 0)
+      return res.status(400).json({
+        message:
+          "Silahkan pilih minimal satu permohonan untuk dibuatkan surat pengantar.",
+      });
 
     const selectedTasks = await Task.find({ _id: { $in: selectedTaskIds } });
-    if (selectedTasks.length === 0) return res.status(404).json({ message: "Permohonan yang dipilih tidak ditemukan." });
 
-    const serviceTitles = selectedTasks.map((task) => task.title);
-    const uniqueServiceTitles = [...new Set(serviceTitles)]; // spread operator untuk membuat array baru dengan nilai unik
-    if (uniqueServiceTitles.length > 1) return res.status(400).json({ message: "Hanya permohonan dengan jenis pelayanan yang sama yang bisa dicetak bersamaan."});
-    
-    const reportedSelectedTasks = selectedTasks.filter((task) => task.reportId !== null );
-    if (reportedSelectedTasks.length > 0 && reportedSelectedTasks.length < selectedTasks.length) return res.status(400).json({ message: "Tidak boleh mencampur pemohonan yang sudah pernah dibuat surat pengantarnya dengan yang belum." });
+    if (selectedTasks.length === 0)
+      return res
+        .status(404)
+        .json({ message: "Permohonan yang dipilih tidak ditemukan." });
 
-    const batchReportResult = await createBatchReport(selectedTaskIds, user._id); // _id dengan id itu sama saja, tapi _id lebih umum digunakan di Mongoose
-    const { batchId: nomorPengantar, sequence: nomor} = batchReportResult.data;
+    const uniqueServiceTitles = [
+      ...new Set(selectedTasks.map((task) => task.title)),
+    ]; // spread operator untuk membuat array baru dengan nilai unik
+    if (uniqueServiceTitles.length > 1)
+      return res.status(400).json({
+        message:
+          "Hanya permohonan dengan jenis pelayanan yang sama yang bisa dicetak bersamaan.",
+      });
 
-    const tanggal = fmtDateID(new Date());
-    const jenisPelayanan = uniqueServiceTitles[0].replace(/_/g, " ");
+    const reportedSelectedTasks = selectedTasks.filter(
+      (task) => task.reportId !== null,
+    );
+    if (
+      reportedSelectedTasks.length > 0 &&
+      reportedSelectedTasks.length < selectedTasks.length
+    )
+      return res.status(400).json({
+        message:
+          "Tidak boleh mencampur pemohonan yang sudah pernah dibuat surat pengantarnya dengan yang belum.",
+      });
+
+    if (reportedSelectedTasks.length === selectedTasks.length) {
+      const existingReport = await Report.findById(
+        reportedSelectedTasks[0].reportId,
+      );
+      if (existingReport) {
+        return res.status(200).json({
+          message:
+            "Permohonan berhasil dicetak ulang menggunakan nomor pengantar yang sudah ada.",
+        });
+      }
+    }
+
+    const newReport = new Report({
+      tasks: selectedTasks,
+      generatedBy: user._id,
+      status: "FINAL",
+    });
+
+    await newReport.save();
+
+    await Task.updateMany(
+      { _id: { $in: selectedTasks } },
+      {
+        $set: {
+          reportId: newReport._id,
+        },
+      },
+    );
+
+    return res.status(200).json({
+      message: "Surat pengantar berhasil dibuat.",
+      data: {
+        batchId: newReport._id,
+      },
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      message: "Terjadi kesalahan saat membuat surat pengantar.",
+    });
+  }
+};
+
+const generateReport = async (req, res) => {
+  try {
+    const user = req.user;
+
+    if (!["admin", "peneliti"].includes(user.role))
+      return res.status(403).json({
+        message: "Anda tidak memiliki izin untuk mengakses fitur ini.",
+      });
+
+    const { reportId } = req.params; // Biasanya ID dikirim via params jika GET
+
+    // 1. Ambil data Report dan populate tasks-nya
+    const report = await Report.findById(reportId).populate("tasks");
+
+    if (!report) {
+      return res.status(404).json({ message: "Laporan tidak ditemukan" });
+    }
+
+    console.log("Report Data:", report.sequence, report.year, report.batchId);
+
+    // 2. Definisikan variabel pendukung berdasarkan data dari DB
+    const selectedTasks = report.tasks || [];
+    const nomorPengantar = report.batchId; // Mengambil 973/001-UPT.PD.WIL.IV/2026
+    const nomor = report.sequence; // Mengambil 001
+    const tanggal = fmtDateID(report.createdAt); // Menggunakan tanggal laporan dibuat
+
+    // Mengambil jenis pelayanan dari task pertama (asumsi satu batch satu jenis)
+    // Jika tasks kosong, berikan fallback "-"
+    const rawServiceTitle = selectedTasks[0]?.title || "-";
+    const jenisPelayanan = rawServiceTitle.replace(/_/g, " ");
 
     const doc = new PDFDocument({ size: "A4", margin: 50 });
 
+    // 3. Header PDF
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
       "Content-Disposition",
@@ -65,7 +164,9 @@ const generateReport = async (req, res) => {
         align: "left",
         valign: "top",
       });
-    } catch (e) {}
+    } catch (e) {
+      console.error("Logo tidak ditemukan:", e.message);
+    }
 
     const lineY = doc.y + 5;
     doc
@@ -79,6 +180,7 @@ const generateReport = async (req, res) => {
       doc.page.width - doc.page.margins.left - doc.page.margins.right;
     const startY = doc.y;
 
+    // 4. Informasi Surat
     doc.text(`Nomor     : ${nomorPengantar}`, doc.page.margins.left, startY, {
       align: "left",
     });
@@ -88,6 +190,7 @@ const generateReport = async (req, res) => {
     });
     doc.moveDown(1);
 
+    // Hitung total berkas (termasuk pecahannya jika ada di additionalData)
     let totalBerkas = 0;
     selectedTasks.forEach((task) => {
       totalBerkas += task.additionalData?.length || 1;
@@ -95,7 +198,7 @@ const generateReport = async (req, res) => {
 
     doc.text(`Lampiran : ${totalBerkas} Berkas`);
     doc.text(
-      `Hal           : Rekomendasi Permohonan ${jenisPelayanan} SPPT Tahun ${new Date().getFullYear()}`,
+      `Hal           : Rekomendasi Permohonan ${jenisPelayanan} SPPT Tahun ${report.year}`,
     );
     doc.moveDown(1);
 
@@ -108,11 +211,12 @@ const generateReport = async (req, res) => {
     doc.moveDown(1);
 
     doc.text(
-      `Dipermaklumkan dengan hormat, bersama ini kami sampaikan data permohonan ${jenisPelayanan} SPPT PBB Tahun ${new Date().getFullYear()} pada pelayanan tatap muka UPTD Wilayah IV sebagai berikut:`,
+      `Dipermaklumkan dengan hormat, bersama ini kami sampaikan data permohonan ${jenisPelayanan} SPPT PBB Tahun ${report.year} pada pelayanan tatap muka UPTD Wilayah IV sebagai berikut:`,
       { align: "justify" },
     );
     doc.moveDown(1);
 
+    // 5. Tabel Ringkasan
     const tableStartX = doc.x;
     let tableY = doc.y;
     const ringkasHeaders = ["NO AGENDA", "JENIS", "JUMLAH", "KETERANGAN"];
@@ -152,31 +256,23 @@ const generateReport = async (req, res) => {
     doc.moveDown(2);
 
     doc.x = doc.page.margins.left;
-
     doc.font("Helvetica").fontSize(11);
     doc.text(
       `Sehubungan dengan hal ini, bahwa berkas permohonan ${jenisPelayanan} SPPT PBB tersebut sudah melalui proses penelitian/verifikasi dan diarsipkan sebagaimana mestinya (data terlampir).`,
-      {
-        align: "justify",
-        width: contentWidth, // Pastikan memberikan lebar agar justify bekerja sempurna
-      },
+      { align: "justify", width: contentWidth },
     );
 
-    doc.moveDown(1); // Gunakan 1 atau 2 sesuai kebutuhan estetika
-
+    doc.moveDown(1);
     doc.text(
       "Demikian surat rekomendasi ini kami sampaikan, atas perhatiannya diucapkan terimakasih.",
-      {
-        align: "justify",
-        width: contentWidth,
-      },
+      { align: "justify", width: contentWidth },
     );
 
     doc.moveDown(2);
 
+    // 6. Tanda Tangan Halaman 1
     const footerX = doc.page.margins.left + contentWidth / 2 + 40;
     const footerWidth1 = contentWidth / 2;
-    doc.moveDown(4);
     doc.font("Helvetica").fontSize(10);
     doc.text("Kepala UPTD", footerX, doc.y, {
       width: footerWidth1,
@@ -186,7 +282,7 @@ const generateReport = async (req, res) => {
       width: footerWidth1,
       align: "center",
     });
-    doc.moveDown(5);
+    doc.moveDown(4);
     doc.text("ASEP SUANDI, SH., M.Si", footerX, doc.y, {
       width: footerWidth1,
       align: "center",
@@ -196,6 +292,7 @@ const generateReport = async (req, res) => {
       align: "center",
     });
 
+    // 7. Lampiran (Halaman 2 - Landscape)
     doc.addPage({ size: "A4", layout: "landscape", margin: 10 });
     doc.font("Helvetica").fontSize(10);
     doc.text(`Nomor      : ${nomorPengantar}`);
@@ -217,7 +314,7 @@ const generateReport = async (req, res) => {
           main.address || "-",
           main.village || "-",
           main.subdistrict || "-",
-          jenisPelayanan,
+          rawServiceTitle.replace(/_/g, " "),
           addData.landWide || "-",
           addData.buildingWide || "-",
           addData.certificate || "-",
@@ -270,18 +367,21 @@ const generateReport = async (req, res) => {
 
     let rowH = drawRow(headers, y, true);
     y += rowH;
+
     rows.forEach((row) => {
       const neededHeight = drawRow(row, y, false);
-      if (y + neededHeight > doc.page.height - 50) {
+      if (y + neededHeight > doc.page.height - 100) {
+        // Cek sisa ruang halaman
         doc.addPage({ size: "A4", layout: "landscape", margin: 10 });
-        y = doc.y;
+        y = doc.page.margins.top;
         rowH = drawRow(headers, y, true);
         y += rowH;
       }
       y += neededHeight;
     });
 
-    const footerY = y + 40;
+    // 8. Tanda Tangan Lampiran
+    const footerY = y + 20;
     let x2 = startX2;
     for (let i = 0; i < colWidths.length - 4; i++) x2 += colWidths[i];
     const footerWidth = colWidths.slice(-4).reduce((a, b) => a + b, 0);
@@ -293,7 +393,7 @@ const generateReport = async (req, res) => {
       width: footerWidth,
       align: "center",
     });
-    doc.moveDown(5);
+    doc.moveDown(4);
     doc.text("ASEP SUANDI, SH., M.Si", x2, doc.y, {
       width: footerWidth,
       align: "center",
@@ -306,7 +406,11 @@ const generateReport = async (req, res) => {
     doc.end();
   } catch (error) {
     console.error("Gagal ekspor surat pengantar PDF:", error);
-    res.status(500).json({ message: "Gagal ekspor PDF", error: error.message });
+    if (!res.headersSent) {
+      res
+        .status(500)
+        .json({ message: "Gagal ekspor PDF", error: error.message });
+    }
   }
 };
 
@@ -562,6 +666,7 @@ const addAttachmentToReport = async (req, res) => {
 };
 
 module.exports = {
+  createReport,
   generateReport,
   getVerifiedTasksForExport,
   addAttachmentToTask,

@@ -36,9 +36,11 @@ export const API_PATHS = {
 
   REPORTS: {
     // Pengelolaan Surat Pengantar & Export
+    CREATE_REPORT: "/api/reports/create-report",
     DAFTAR_SURAT_PENGANTAR: "/api/reports/daftar-surat-pengantar",
     EXPORTED_REPORTS: "/api/reports/exported-reports",
-    EXPORT_SELECTED_TASKS: "/api/reports/export-selected",
+    EXPORT_SELECTED_TASKS: (reportId) =>
+      `/api/reports/export-selected/${reportId}`,
 
     // Lampiran & Link (Unified naming)
     ADD_ATTACHMENT: (taskId) => `/api/reports/add-attachment/${taskId}`,
