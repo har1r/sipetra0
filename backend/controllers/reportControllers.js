@@ -5,8 +5,6 @@ const { createBatchReport } = require("../services/createBatchReport"); // Gunak
 const path = require("path");
 const LOGO_PATH = path.resolve(__dirname, "./assets/logo-kab.png");
 
-const fs = require("fs");
-
 const fmtDateID = (d = new Date()) =>
   new Intl.DateTimeFormat("id-ID", {
     day: "2-digit",
@@ -14,45 +12,33 @@ const fmtDateID = (d = new Date()) =>
     year: "numeric",
   }).format(d);
 
-const exportReport = async (req, res) => {
+const generateReport = async (req, res) => {
   try {
     const user = req.user;
-    if (!user) return res.status(401).json({ message: "Unauthorized" });
+    const { selectedTaskIds } = req.body; // selectedTaksIds berisi id dari permohonan yang dipilih untuk dibuatkan surat pengantar
+    
+    if (!user) return res.status(401).json({ message: "Silahkan login terlebih dahulu." });
+    if (!["admin", "peneliti"].includes(user.role)) return res.status(403).json({ message: "Anda tidak memiliki izin untuk mengakses fitur ini."});
+    if (!Array.isArray(selectedTaskIds) || selectedTaskIds.length === 0) return res.status(400).json({ message: "Silahkan pilih minimal satu permohonan untuk dibuatkan surat pengantar." });
 
-    if (!["admin", "peneliti"].includes(user.role)) {
-      return res.status(403).json({
-        message: "Anda tidak memiliki izin untuk mengakses fitur ini.",
-      });
-    }
+    const selectedTasks = await Task.find({ _id: { $in: selectedTaskIds } });
+    if (selectedTasks.length === 0) return res.status(404).json({ message: "Permohonan yang dipilih tidak ditemukan." });
 
-    const { taskIds } = req.body;
-    if (!Array.isArray(taskIds) || taskIds.length === 0) {
-      return res.status(400).json({ message: "Daftar task kosong." });
-    }
+    const serviceTitles = selectedTasks.map((task) => task.title);
+    const uniqueServiceTitles = [...new Set(serviceTitles)]; // spread operator untuk membuat array baru dengan nilai unik
+    if (uniqueServiceTitles.length > 1) return res.status(400).json({ message: "Hanya permohonan dengan jenis pelayanan yang sama yang bisa dicetak bersamaan."});
+    
+    const reportedSelectedTasks = selectedTasks.filter((task) => task.reportId !== null );
+    if (reportedSelectedTasks.length > 0 && reportedSelectedTasks.length < selectedTasks.length) return res.status(400).json({ message: "Tidak boleh mencampur pemohonan yang sudah pernah dibuat surat pengantarnya dengan yang belum." });
 
-    const tasks = await Task.find({ _id: { $in: taskIds } });
-    if (tasks.length === 0)
-      return res.status(404).json({ message: "Task tidak ditemukan." });
-
-    // Validasi hanya 1 jenis title
-    const titles = tasks.map((t) => t.title);
-    const uniqueTitles = [...new Set(titles)];
-    if (uniqueTitles.length > 1) {
-      return res.status(400).json({
-        message:
-          "Hanya task dengan title yang sama yang bisa di-print bersamaan.",
-      });
-    }
-
-    // 🔹 SEKARANG: Gunakan service baru yang terhubung ke model Report
-    // Mengembalikan: { batchId, sequence, totalTasks, reportId }
-    const result = await createBatchReport(taskIds, user.id);
-    const { batchId: nomorPengantar, sequence: nomor, year } = result.data;
+    const batchReportResult = await createBatchReport(selectedTaskIds, user._id); // _id dengan id itu sama saja, tapi _id lebih umum digunakan di Mongoose
+    const { batchId: nomorPengantar, sequence: nomor} = batchReportResult.data;
 
     const tanggal = fmtDateID(new Date());
-    const jenisPelayanan = uniqueTitles[0].replace(/_/g, " ");
+    const jenisPelayanan = uniqueServiceTitles[0].replace(/_/g, " ");
 
     const doc = new PDFDocument({ size: "A4", margin: 50 });
+
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader(
       "Content-Disposition",
@@ -60,9 +46,6 @@ const exportReport = async (req, res) => {
     );
     doc.pipe(res);
 
-    // =======================================================
-    // PAGE 1 : Surat Rekomendasi
-    // =======================================================
     doc.font("Helvetica").fontSize(11);
     doc.text("PEMERINTAH KABUPATEN TANGERANG", { align: "center" });
     doc.text("BADAN PENDAPATAN DAERAH", { align: "center" });
@@ -106,7 +89,7 @@ const exportReport = async (req, res) => {
     doc.moveDown(1);
 
     let totalBerkas = 0;
-    tasks.forEach((task) => {
+    selectedTasks.forEach((task) => {
       totalBerkas += task.additionalData?.length || 1;
     });
 
@@ -130,7 +113,6 @@ const exportReport = async (req, res) => {
     );
     doc.moveDown(1);
 
-    // ===== Tabel ringkas jumlah berkas =====
     const tableStartX = doc.x;
     let tableY = doc.y;
     const ringkasHeaders = ["NO AGENDA", "JENIS", "JUMLAH", "KETERANGAN"];
@@ -189,7 +171,6 @@ const exportReport = async (req, res) => {
         width: contentWidth,
       },
     );
-    // -------------------------
 
     doc.moveDown(2);
 
@@ -215,9 +196,6 @@ const exportReport = async (req, res) => {
       align: "center",
     });
 
-    // =======================================================
-    // PAGE 2 : Tabel Rincian Task (Landscape)
-    // =======================================================
     doc.addPage({ size: "A4", layout: "landscape", margin: 10 });
     doc.font("Helvetica").fontSize(10);
     doc.text(`Nomor      : ${nomorPengantar}`);
@@ -226,7 +204,7 @@ const exportReport = async (req, res) => {
 
     let rows = [];
     let index = 1;
-    for (const task of tasks) {
+    for (const task of selectedTasks) {
       const main = task.mainData || {};
       const adds = task.additionalData?.length > 0 ? task.additionalData : [{}];
       for (const addData of adds) {
@@ -303,7 +281,6 @@ const exportReport = async (req, res) => {
       y += neededHeight;
     });
 
-    // Footer Page 2
     const footerY = y + 40;
     let x2 = startX2;
     for (let i = 0; i < colWidths.length - 4; i++) x2 += colWidths[i];
@@ -585,7 +562,7 @@ const addAttachmentToReport = async (req, res) => {
 };
 
 module.exports = {
-  exportReport,
+  generateReport,
   getVerifiedTasksForExport,
   addAttachmentToTask,
   getBatchReportsHistory,

@@ -134,7 +134,7 @@ const ReportHistory = () => {
     try {
       const response = await axiosInstance.post(
         API_PATHS.REPORTS.EXPORT_SELECTED_TASKS,
-        { taskIds: selectedIds },
+        { selectedTaskIds: selectedIds },
         { responseType: "blob" },
       );
       const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -147,7 +147,20 @@ const ReportHistory = () => {
       setSelectedIds([]);
       fetchTasks();
     } catch (err) {
-      toast.error("Gagal memproses PDF", { id: toastId });
+      let errorMessage = "Terjadi kesalahan saat mengekspor PDF.";
+
+      if (err.response && err.response.data instanceof Blob) {
+        // Ubah blob kembali ke teks secara asinkron
+        const reader = new FileReader();
+        reader.onload = () => {
+          const responseData = JSON.parse(reader.result);
+          toast.error(responseData.message || errorMessage, { id: toastId });
+        };
+        reader.readAsText(err.response.data);
+        return; // Keluar agar tidak menabrak toast di bawah
+      }
+
+      toast.error(errorMessage, { id: toastId });
     } finally {
       setExporting(false);
     }
