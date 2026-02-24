@@ -75,7 +75,7 @@ const ReportHistory = () => {
       };
 
       const res = await axiosInstance.get(
-        API_PATHS.REPORTS.DAFTAR_SURAT_PENGANTAR,
+        API_PATHS.REPORTS.GET_VERIFIED_TASKS,
         {
           params,
           signal: ctrl.signal,

@@ -37,10 +37,9 @@ export const API_PATHS = {
   REPORTS: {
     // Pengelolaan Surat Pengantar & Export
     CREATE_REPORT: "/api/reports/create-report",
-    DAFTAR_SURAT_PENGANTAR: "/api/reports/daftar-surat-pengantar",
+    GENERATE_REPORT: (reportId) => `/api/reports/generate-report/${reportId}`,
+    GET_VERIFIED_TASKS: "/api/reports/get-verified-tasks",
     EXPORTED_REPORTS: "/api/reports/exported-reports",
-    EXPORT_SELECTED_TASKS: (reportId) =>
-      `/api/reports/export-selected/${reportId}`,
 
     // Lampiran & Link (Unified naming)
     ADD_ATTACHMENT: (taskId) => `/api/reports/add-attachment/${taskId}`,

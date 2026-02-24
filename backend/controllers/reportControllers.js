@@ -2,7 +2,6 @@ const mongoose = require("mongoose");
 const PDFDocument = require("pdfkit");
 const Task = require("../models/Task");
 const Report = require("../models/Report");
-// const { createReport } = require("../services/createBatchReport"); // Gunakan fungsi baru
 const path = require("path");
 const LOGO_PATH = path.resolve(__dirname, "./assets/logo-kab.png");
 
@@ -15,6 +14,9 @@ const fmtDateID = (d = new Date()) =>
 
 // @Deskripsi: Membuat no surat pengantar berdasarkan permohonan yang dipilih contoh: 973/001-UPT.PD.WIL.IV/2026
 const createReport = async (req, res) => {
+  const session = await mongoose.startSession(); // Menggabungkan operasi database mongoDB dalam satu transaksi untuk memastikan konsistensi data
+  session.startTransaction(); // Operasi berhasil (commit) maka berhasil semua, jika gagal maka semua operasi dibatalkan (rollback)
+  
   try {
     const user = req.user;
     const { selectedTaskIds } = req.body; // selectedTaksIds berisi id dari permohonan yang dipilih untuk dibuatkan surat pengantar
@@ -22,404 +24,322 @@ const createReport = async (req, res) => {
     if (!user)
       return res
         .status(401)
-        .json({ message: "Silahkan login terlebih dahulu." });
+        .json({ message: "Silahkan login." });
     if (!["admin", "peneliti"].includes(user.role))
       return res.status(403).json({
-        message: "Anda tidak memiliki izin untuk mengakses fitur ini.",
+        message: "Izin akses ditolak.",
       });
     if (!Array.isArray(selectedTaskIds) || selectedTaskIds.length === 0)
       return res.status(400).json({
         message:
-          "Silahkan pilih minimal satu permohonan untuk dibuatkan surat pengantar.",
+          "Pilih minimal satu permohonan.",
       });
 
-    const selectedTasks = await Task.find({ _id: { $in: selectedTaskIds } });
+    const selectedTasks = await Task.find({ _id: { $in: selectedTaskIds } }, { title: 1, reportId: 1 }).session(session);
 
-    if (selectedTasks.length === 0)
+    if (selectedTasks.length !== selectedTaskIds.length)
       return res
         .status(404)
-        .json({ message: "Permohonan yang dipilih tidak ditemukan." });
+        .json({ message: "Beberapa permohonan yang dipilih tidak ditemukan." });
 
-    const uniqueServiceTitles = [
-      ...new Set(selectedTasks.map((task) => task.title)),
-    ]; // spread operator untuk membuat array baru dengan nilai unik
-    if (uniqueServiceTitles.length > 1)
+    const titles = new Set(selectedTasks.map((task) => task.title));
+    if (titles.size > 1) {
       return res.status(400).json({
         message:
-          "Hanya permohonan dengan jenis pelayanan yang sama yang bisa dicetak bersamaan.",
+          "Jenis pelayanan harus sama.",
       });
+    }
 
-    const reportedSelectedTasks = selectedTasks.filter(
-      (task) => task.reportId !== null,
+    const tasksWithReport = selectedTasks.filter(
+      (task) => task.reportId
     );
-    if (
-      reportedSelectedTasks.length > 0 &&
-      reportedSelectedTasks.length < selectedTasks.length
-    )
-      return res.status(400).json({
-        message:
-          "Tidak boleh mencampur pemohonan yang sudah pernah dibuat surat pengantarnya dengan yang belum.",
+    const uniqueTasksWithReport = new Set(tasksWithReport.map(task => task.reportId.toString()));
+    if (uniqueTasksWithReport.size > 1) {
+    return res.status(400).json({ 
+    message: "Tugas yang dipilih berasal dari beberapa laporan yang berbeda." 
       });
-
-    if (reportedSelectedTasks.length === selectedTasks.length) {
-      const existingReport = await Report.findById(
-        reportedSelectedTasks[0].reportId,
-      );
-      if (existingReport) {
-        return res.status(200).json({
-          message:
-            "Permohonan berhasil dicetak ulang menggunakan nomor pengantar yang sudah ada.",
-        });
-      }
+    }
+    if (tasksWithReport.length === selectedTasks.length) {
+      await session.abortTransaction(); // Batalkan transaksi karena tidak ada data baru yang dibuat
+      return res.status(200).json({
+        message: "Menggunakan nomor pengantar yang sudah ada.",
+        data: { batchId: tasksWithReport[0].reportId }
+      });
+    }
+    if (tasksWithReport.length > 0) {
+      return res.status(400).json({ message: "Tidak boleh mencampur permohonan lama dan baru." });
     }
 
     const newReport = new Report({
-      tasks: selectedTasks,
+      tasks: selectedTaskIds,
       generatedBy: user._id,
       status: "FINAL",
     });
 
-    await newReport.save();
+    await newReport.save({ session });
 
     await Task.updateMany(
-      { _id: { $in: selectedTasks } },
-      {
-        $set: {
-          reportId: newReport._id,
-        },
-      },
+      { _id: { $in: selectedTaskIds } },
+      { $set: { reportId: newReport._id } },
+      { session }
     );
 
+    await session.commitTransaction(); // Jika semua operasi berhasil, komit transaksi
+
     return res.status(200).json({
-      message: "Surat pengantar berhasil dibuat.",
+      message: "Nomor surat pengantar berhasil dibuat.",
       data: {
         batchId: newReport._id,
       },
     });
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({
-      message: "Terjadi kesalahan saat membuat surat pengantar.",
+    await session.abortTransaction(); // Batalkan jika terjadi error di tengah jalan
+    console.error("Error createReport:", error.message);
+    return res.status(500).json({ 
+      message: "Gagal membuat nomor pengantar baru.",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined
     });
+  } finally {
+    session.endSession();
   }
 };
 
+// @Deskripsi: Menghasilkan surat pengantar dalam format PDF berdasarkan data permohonan yang dipilih
 const generateReport = async (req, res) => {
   try {
     const user = req.user;
+    const { reportId } = req.params;
 
-    if (!["admin", "peneliti"].includes(user.role))
+    if (!user)
+      return res
+        .status(401)
+        .json({ message: "Silahkan login." });
+    if (!["admin", "peneliti"].includes(user.role)) {
       return res.status(403).json({
         message: "Anda tidak memiliki izin untuk mengakses fitur ini.",
       });
+    }
 
-    const { reportId } = req.params; // Biasanya ID dikirim via params jika GET
-
-    // 1. Ambil data Report dan populate tasks-nya
-    const report = await Report.findById(reportId).populate("tasks");
+    const report = await Report.findById(reportId).populate("tasks").lean();
 
     if (!report) {
       return res.status(404).json({ message: "Laporan tidak ditemukan" });
     }
 
-    console.log("Report Data:", report.sequence, report.year, report.batchId);
-
-    // 2. Definisikan variabel pendukung berdasarkan data dari DB
+    // 1. Persiapan Data & Variabel Pendukung
     const selectedTasks = report.tasks || [];
-    const nomorPengantar = report.batchId; // Mengambil 973/001-UPT.PD.WIL.IV/2026
-    const nomor = report.sequence; // Mengambil 001
-    const tanggal = fmtDateID(report.createdAt); // Menggunakan tanggal laporan dibuat
-
-    // Mengambil jenis pelayanan dari task pertama (asumsi satu batch satu jenis)
-    // Jika tasks kosong, berikan fallback "-"
+    const nomorPengantar = report.batchId;
+    const nomor = report.sequence;
+    const tanggal = fmtDateID(report.createdAt);
     const rawServiceTitle = selectedTasks[0]?.title || "-";
     const jenisPelayanan = rawServiceTitle.replace(/_/g, " ");
+    
+    // Konstanta Layout
+    const marginLeft = 50;
+    const marginRight = 50;
+    const contentWidth = 595 - marginLeft - marginRight; // A4 width is 595
 
-    const doc = new PDFDocument({ size: "A4", margin: 50 });
+    // Pemrosesan Baris Lampiran (Halaman 2) & Hitung Total Berkas
+    const rows = [];
+    let totalBerkas = 0;
+    selectedTasks.forEach((task) => {
+      const adds = task.additionalData?.length > 0 ? task.additionalData : [{}];
+      totalBerkas += adds.length;
+      
+      adds.forEach((addData) => {
+        rows.push([
+          rows.length + 1,
+          task.mainData?.nopel || "-",
+          task.mainData?.nop || "-",
+          addData.newName || "-",
+          task.mainData?.oldName || "-",
+          task.mainData?.address || "-",
+          task.mainData?.village || "-",
+          task.mainData?.subdistrict || "-",
+          jenisPelayanan,
+          addData.landWide || "-",
+          addData.buildingWide || "-",
+          addData.certificate || "-",
+        ]);
+      });
+    });
 
-    // 3. Header PDF
+    // 2. Inisialisasi PDF
+    const doc = new PDFDocument({ size: "A4", margin: marginLeft });
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename=surat_pengantar_${nomor}.pdf`,
-    );
+    res.setHeader("Content-Disposition", `attachment; filename=surat_pengantar_${nomor}.pdf`);
     doc.pipe(res);
 
+    // HELPER: Fungsi Tanda Tangan agar konsisten di semua halaman
+    const drawSignature = (d, x, y, width, label) => {
+      d.y = y;
+      d.x = x;
+      d.font("Helvetica").fontSize(10);
+      d.text("Kepala UPTD", { width, align: "center" });
+      d.text("Pajak Daerah Wilayah IV", { width, align: "center" });
+      d.moveDown(4);
+      d.font("Helvetica-Bold").text("ASEP SUANDI, SH., M.Si", { width, align: "center" });
+      d.font("Helvetica").text("NIP. 19800630 200801 1 006", { width, align: "center" });
+    };
+
+    // 3. HEADER PDF (Halaman 1)
     doc.font("Helvetica").fontSize(11);
     doc.text("PEMERINTAH KABUPATEN TANGERANG", { align: "center" });
     doc.text("BADAN PENDAPATAN DAERAH", { align: "center" });
-    doc.text("Gedung Pendapatan Daerah Komp. Perkantoran Tigaraksa", {
-      align: "center",
-    });
+    doc.fontSize(9);
+    doc.text("Gedung Pendapatan Daerah Komp. Perkantoran Tigaraksa", { align: "center" });
     doc.text("Telp. (021) 599 88333 Fax. (021) 599 88333", { align: "center" });
-    doc.text(
-      "Website: bapendatangerangkab.go.id Email : bapenda@tangerangkab.go.id",
-      { align: "center" },
-    );
+    doc.text("Website: bapendatangerangkab.go.id Email : bapenda@tangerangkab.go.id", { align: "center" });
 
     try {
-      const topY = doc.page.margins.top;
-      doc.image(LOGO_PATH, doc.page.margins.left - 2, topY - 10, {
-        fit: [100, 70],
-        align: "left",
-        valign: "top",
-      });
+      doc.image(LOGO_PATH, marginLeft - 2, 40, { fit: [100, 70] });
     } catch (e) {
       console.error("Logo tidak ditemukan:", e.message);
     }
 
-    const lineY = doc.y + 5;
-    doc
-      .moveTo(doc.page.margins.left, lineY)
-      .lineTo(doc.page.width - doc.page.margins.right, lineY)
-      .lineWidth(2)
-      .stroke();
-    doc.moveDown(2);
+    const lineY = 115;
+    doc.moveTo(marginLeft, lineY).lineTo(595 - marginRight, lineY).lineWidth(2).stroke();
+    doc.moveDown(3);
 
-    const contentWidth =
-      doc.page.width - doc.page.margins.left - doc.page.margins.right;
-    const startY = doc.y;
-
-    // 4. Informasi Surat
-    doc.text(`Nomor     : ${nomorPengantar}`, doc.page.margins.left, startY, {
-      align: "left",
-    });
-    doc.text(`Tigaraksa, ${tanggal}`, doc.page.margins.left, startY, {
-      width: contentWidth,
-      align: "right",
-    });
-    doc.moveDown(1);
-
-    // Hitung total berkas (termasuk pecahannya jika ada di additionalData)
-    let totalBerkas = 0;
-    selectedTasks.forEach((task) => {
-      totalBerkas += task.additionalData?.length || 1;
-    });
-
+    // 4. INFORMASI SURAT
+    const topInfoY = doc.y;
+    doc.font("Helvetica").fontSize(10);
+    doc.text(`Nomor     : ${nomorPengantar}`, marginLeft, topInfoY);
+    doc.text(`Tigaraksa, ${tanggal}`, marginLeft, topInfoY, { width: contentWidth, align: "right" });
+    
     doc.text(`Lampiran : ${totalBerkas} Berkas`);
-    doc.text(
-      `Hal           : Rekomendasi Permohonan ${jenisPelayanan} SPPT Tahun ${report.year}`,
-    );
-    doc.moveDown(1);
+    doc.text(`Hal           : Rekomendasi Permohonan ${jenisPelayanan} SPPT Tahun ${report.year}`);
+    doc.moveDown(1.5);
 
     doc.text("Yth. Kepala Badan Pendapatan Daerah");
-    doc.text(
-      "Cq. Kepala Bidang Pendataan, Penilaian, dan Penetapan Pajak Daerah",
-    );
+    doc.text("Cq. Kepala Bidang Pendataan, Penilaian, dan Penetapan Pajak Daerah");
     doc.text("di");
     doc.text("Tempat");
-    doc.moveDown(1);
+    doc.moveDown(1.5);
 
+    // Paragraf 1
     doc.text(
       `Dipermaklumkan dengan hormat, bersama ini kami sampaikan data permohonan ${jenisPelayanan} SPPT PBB Tahun ${report.year} pada pelayanan tatap muka UPTD Wilayah IV sebagai berikut:`,
-      { align: "justify" },
+      { align: "justify", width: contentWidth }
     );
     doc.moveDown(1);
 
-    // 5. Tabel Ringkasan
-    const tableStartX = doc.x;
+    // 5. TABEL RINGKASAN
     let tableY = doc.y;
     const ringkasHeaders = ["NO AGENDA", "JENIS", "JUMLAH", "KETERANGAN"];
-    const ringkasValues = [
-      String(nomor),
-      jenisPelayanan,
-      `${totalBerkas} Berkas`,
-      "Rincian Berkas Terlampir",
-    ];
+    const ringkasValues = [String(nomor), jenisPelayanan, `${totalBerkas} Berkas`, "Rincian Berkas Terlampir"];
     const ringkasWidths = [90, 140, 100, 165];
     const rowHeight = 25;
 
-    let x = tableStartX;
+    // Draw Header Tabel
+    let currentX = marginLeft;
     ringkasHeaders.forEach((header, i) => {
-      const w = ringkasWidths[i];
-      doc.rect(x, tableY, w, rowHeight).stroke();
-      doc
-        .font("Helvetica-Bold")
-        .fontSize(9)
-        .text(header, x + 4, tableY + 8, { width: w - 8, align: "center" });
-      x += w;
+      doc.rect(currentX, tableY, ringkasWidths[i], rowHeight).stroke();
+      doc.font("Helvetica-Bold").fontSize(9).text(header, currentX + 4, tableY + 8, { width: ringkasWidths[i] - 8, align: "center" });
+      currentX += ringkasWidths[i];
     });
-    tableY += rowHeight;
 
-    x = tableStartX;
+    // Draw Value Tabel
+    tableY += rowHeight;
+    currentX = marginLeft;
     ringkasValues.forEach((val, i) => {
-      const w = ringkasWidths[i];
-      doc.rect(x, tableY, w, rowHeight).stroke();
-      doc
-        .font("Helvetica")
-        .fontSize(9)
-        .text(val, x + 4, tableY + 8, { width: w - 8, align: "center" });
-      x += w;
+      doc.rect(currentX, tableY, ringkasWidths[i], rowHeight).stroke();
+      doc.font("Helvetica").fontSize(9).text(val, currentX + 4, tableY + 8, { width: ringkasWidths[i] - 8, align: "center" });
+      currentX += ringkasWidths[i];
     });
 
-    tableY += rowHeight;
-    doc.moveDown(2);
-
-    doc.x = doc.page.margins.left;
-    doc.font("Helvetica").fontSize(11);
+    // 6. PARAGRAF PENUTUP (Alignment diperbaiki)
+    doc.y = tableY + rowHeight + 15;
+    doc.x = marginLeft; // Reset X agar sejajar
+    doc.font("Helvetica").fontSize(10);
+    
     doc.text(
       `Sehubungan dengan hal ini, bahwa berkas permohonan ${jenisPelayanan} SPPT PBB tersebut sudah melalui proses penelitian/verifikasi dan diarsipkan sebagaimana mestinya (data terlampir).`,
-      { align: "justify", width: contentWidth },
+      { align: "justify", width: contentWidth }
     );
 
     doc.moveDown(1);
     doc.text(
       "Demikian surat rekomendasi ini kami sampaikan, atas perhatiannya diucapkan terimakasih.",
-      { align: "justify", width: contentWidth },
+      { align: "justify", width: contentWidth }
     );
 
-    doc.moveDown(2);
+    // Tanda Tangan Hal 1
+    drawSignature(doc, 330, doc.y + 30, 200);
 
-    // 6. Tanda Tangan Halaman 1
-    const footerX = doc.page.margins.left + contentWidth / 2 + 40;
-    const footerWidth1 = contentWidth / 2;
-    doc.font("Helvetica").fontSize(10);
-    doc.text("Kepala UPTD", footerX, doc.y, {
-      width: footerWidth1,
-      align: "center",
-    });
-    doc.text("Pajak Daerah Wilayah IV", footerX, doc.y, {
-      width: footerWidth1,
-      align: "center",
-    });
-    doc.moveDown(4);
-    doc.text("ASEP SUANDI, SH., M.Si", footerX, doc.y, {
-      width: footerWidth1,
-      align: "center",
-    });
-    doc.text("NIP. 19800630 200801 1 006", footerX, doc.y, {
-      width: footerWidth1,
-      align: "center",
-    });
-
-    // 7. Lampiran (Halaman 2 - Landscape)
-    doc.addPage({ size: "A4", layout: "landscape", margin: 10 });
-    doc.font("Helvetica").fontSize(10);
+    // 7. LAMPIRAN (Halaman 2 - Landscape)
+    doc.addPage({ size: "A4", layout: "landscape", margin: 20 });
+    doc.font("Helvetica").fontSize(9);
     doc.text(`Nomor      : ${nomorPengantar}`);
     doc.text(`Tanggal    : ${tanggal}`);
     doc.moveDown(1);
 
-    let rows = [];
-    let index = 1;
-    for (const task of selectedTasks) {
-      const main = task.mainData || {};
-      const adds = task.additionalData?.length > 0 ? task.additionalData : [{}];
-      for (const addData of adds) {
-        rows.push([
-          index++,
-          main.nopel || "-",
-          main.nop || "-",
-          addData.newName || "-",
-          main.oldName || "-",
-          main.address || "-",
-          main.village || "-",
-          main.subdistrict || "-",
-          rawServiceTitle.replace(/_/g, " "),
-          addData.landWide || "-",
-          addData.buildingWide || "-",
-          addData.certificate || "-",
-        ]);
-      }
-    }
+    const colWidths = [25, 55, 100, 80, 80, 130, 65, 65, 70, 35, 35, 70];
+    const headers = ["NO", "NOPEL", "NOP", "NAMA PEMOHON", "NAMA SPPT", "ALAMAT OP", "DESA", "KEC", "JENIS", "LT", "LB", "BUKTI"];
 
-    const startX2 = doc.x;
-    let y = doc.y;
-    const colWidths = [25, 55, 100, 75, 75, 135, 65, 65, 70, 40, 40, 80];
-    const headers = [
-      "NO",
-      "NOPEL",
-      "NOP",
-      "NAMA PEMOHON",
-      "NAMA SPPT",
-      "ALAMAT OP",
-      "DESA",
-      "KECAMATAN",
-      "JENIS",
-      "LT",
-      "LB",
-      "BUKTI",
-    ];
-
-    function drawRow(row, yRow, isHeader = false) {
-      let xRow = startX2;
-      const heights = row.map(
-        (text, i) =>
-          doc.heightOfString(String(text), {
-            width: colWidths[i] - 4,
-            lineBreak: !isHeader,
-          }) + 8,
-      );
-      const rowHeightLocal = isHeader ? 20 : Math.max(...heights);
+    const drawTableRow = (row, yPos, isHeader = false) => {
+      let maxHeight = 0;
+      
+      // Hitung tinggi baris berdasarkan teks terpanjang
       row.forEach((text, i) => {
-        const width = colWidths[i];
-        doc.rect(xRow, yRow, width, rowHeightLocal).stroke();
-        doc
-          .font(isHeader ? "Helvetica-Bold" : "Helvetica")
-          .fontSize(isHeader ? 8 : 7);
-        doc.text(String(text), xRow + 2, yRow + 7, {
-          width: width - 4,
-          align: isHeader ? "center" : "left",
-        });
-        xRow += width;
+        const h = doc.heightOfString(String(text), { width: colWidths[i] - 4 }) + 10;
+        if (h > maxHeight) maxHeight = h;
       });
-      return rowHeightLocal;
-    }
 
-    let rowH = drawRow(headers, y, true);
-    y += rowH;
-
-    rows.forEach((row) => {
-      const neededHeight = drawRow(row, y, false);
-      if (y + neededHeight > doc.page.height - 100) {
-        // Cek sisa ruang halaman
-        doc.addPage({ size: "A4", layout: "landscape", margin: 10 });
-        y = doc.page.margins.top;
-        rowH = drawRow(headers, y, true);
-        y += rowH;
+      // Proteksi pindah halaman jika tidak cukup ruang
+      if (yPos + maxHeight > 550) {
+        doc.addPage({ size: "A4", layout: "landscape", margin: 20 });
+        yPos = 20;
+        // Gambar header lagi di halaman baru
+        let xHeader = 20;
+        headers.forEach((h, i) => {
+          doc.rect(xHeader, yPos, colWidths[i], 20).stroke();
+          doc.font("Helvetica-Bold").fontSize(8).text(h, xHeader + 2, yPos + 6, { width: colWidths[i] - 4, align: "center" });
+          xHeader += colWidths[i];
+        });
+        yPos += 20;
       }
-      y += neededHeight;
+
+      let xCell = 20;
+      row.forEach((text, i) => {
+        doc.rect(xCell, yPos, colWidths[i], maxHeight).stroke();
+        doc.font(isHeader ? "Helvetica-Bold" : "Helvetica").fontSize(isHeader ? 8 : 7);
+        doc.text(String(text), xCell + 2, yPos + 6, { width: colWidths[i] - 4, align: isHeader ? "center" : "left" });
+        xCell += colWidths[i];
+      });
+
+      return maxHeight;
+    };
+
+    // Header Tabel Lampiran
+    let currentY = doc.y;
+    currentY += drawTableRow(headers, currentY, true);
+
+    // Isi Tabel Lampiran
+    rows.forEach((row) => {
+      currentY += drawTableRow(row, currentY, false);
     });
 
-    // 8. Tanda Tangan Lampiran
-    const footerY = y + 20;
-    let x2 = startX2;
-    for (let i = 0; i < colWidths.length - 4; i++) x2 += colWidths[i];
-    const footerWidth = colWidths.slice(-4).reduce((a, b) => a + b, 0);
-
-    doc.y = footerY;
-    doc.font("Helvetica").fontSize(10);
-    doc.text("Kepala UPTD", x2, doc.y, { width: footerWidth, align: "center" });
-    doc.text("Pajak Daerah Wilayah IV", x2, doc.y, {
-      width: footerWidth,
-      align: "center",
-    });
-    doc.moveDown(4);
-    doc.text("ASEP SUANDI, SH., M.Si", x2, doc.y, {
-      width: footerWidth,
-      align: "center",
-    });
-    doc.text("NIP. 19800630 200801 1 006", x2, doc.y, {
-      width: footerWidth,
-      align: "center",
-    });
+    // 8. TANDA TANGAN LAMPIRAN
+    if (currentY + 100 > 550) doc.addPage({ size: "A4", layout: "landscape", margin: 20 });
+    drawSignature(doc, 600, currentY + 20, 200);
 
     doc.end();
   } catch (error) {
-    console.error("Gagal ekspor surat pengantar PDF:", error);
+    console.error("Error generateReport:", error.message);
     if (!res.headersSent) {
-      res
-        .status(500)
-        .json({ message: "Gagal ekspor PDF", error: error.message });
+      res.status(500).json({ message: "Gagal cetak PDF", error: process.env.NODE_ENV === "development" ? error.message : undefined });
     }
   }
 };
 
-// @Deskripsi: Menampilkan daftar tugas yang sudah melewati tahap diteliti/verifikasi untuk dibuatkan surat pengantar
-const getVerifiedTasksForExport = async (req, res) => {
+// @Deskripsi: Menampilkan daftar tugas yang sudah melewati tahap diteliti untuk dibuatkan surat pengantar
+const getVerifiedTasks = async (req, res) => {
   try {
-    const page = parseInt(req.query.page) || 1;
-    const limit = 10;
+    const page = Math.max(1, parseInt(req.query.page) || 1);
+    const limit = Math.min(100, Math.max(1  , parseInt(req.query.limit) || 10));
     const skip = (page - 1) * limit;
+
     const { nopel, startDate, endDate, sortOrder = "desc" } = req.query;
 
     const filters = {
@@ -444,28 +364,30 @@ const getVerifiedTasksForExport = async (req, res) => {
         end.setHours(23, 59, 59, 999);
         filters.updatedAt.$lte = end;
       }
+      if (Object.keys(filters.updatedAt).length === 0) {
+        delete filters.updatedAt;
+      }
     }
 
     const sortingDirection = sortOrder === "asc" ? 1 : -1;
 
-    const totalData = await Task.countDocuments(filters);
+    const [totalData, tasks] = await Promise.all([
+      Task.countDocuments(filters),
+      Task.find(filters)
+        .sort({ updatedAt: sortingDirection })
+        .skip(skip)
+        .limit(limit)
+        .populate({
+          path: "reportId",
+          select: "batchId", // Hanya ambil yang diperlukan
+        })
+        .select("_id title mainData attachments updatedAt additionalData reportId")
+        .lean() // Sangat penting untuk performa read-only
+    ]);
+
     const totalPages = Math.ceil(totalData / limit);
 
-    const tasks = await Task.find(filters)
-      .sort({ updatedAt: sortingDirection }) // Urutkan terbaru
-      .skip(skip) // Lewati data halaman sebelumnya
-      .limit(limit) // Batasi hanya 10 data
-      .populate({
-        path: "reportId",
-        select: "batchId", // Ambil nomor batch saja
-      })
-      .select(
-        "_id title mainData attachments updatedAt additionalData reportId",
-      )
-      .lean(); // Gunakan lean untuk performa lebih baik karena hanya baca data
-
     return res.status(200).json({
-      success: true,
       pagination: {
         totalData,
         totalPages,
@@ -475,30 +397,48 @@ const getVerifiedTasksForExport = async (req, res) => {
         hasPrevPage: page > 1,
         activeSort: sortOrder === "asc" ? "terlama" : "terbaru",
       },
-      tasks: tasks.map((task) => ({
-        ...task,
-        displayBatchId: task.reportId
-          ? task.reportId.batchId
-          : "Belum Ada Batch",
-      })),
+      tasks: tasks.map((task) => {
+        const { reportId, ...taskData } = task;
+        return {
+          ...taskData,
+          reportId: reportId?._id || null, // Tetap sertakan ID asli jika butuh
+          displayBatchId: reportId?.batchId || "Belum Ada Batch",
+        };
+      }),
     });
   } catch (error) {
+    console.error("Error getVerifiedTasks:", error);
     return res.status(500).json({
-      success: false,
-      message: "Gagal mengambil data untuk export.",
+      message: "Gagal mengambil data permohonan yang sudah diteliti.",error: process.env.NODE_ENV === "development" ? error.message : undefined
     });
   }
 };
 
+// @Deskripsi: Menambahkan lampiran berupa link Google Drive pada setiap tugas yang sudah diverifikasi untuk dijadikan arsip
 const addAttachmentToTask = async (req, res) => {
   try {
+    const user = req.user;
     const { taskId } = req.params;
     const { fileName, driveLink } = req.body;
 
-    if (!fileName || !driveLink) {
+    if (!user) return res
+        .status(401)
+        .json({ message: "Silahkan login." });
+    if (!["admin", "pengarsip"].includes(user.role)) {
+      return res.status(403).json({
+        message: "Anda tidak memiliki izin untuk mengakses fitur ini.",
+      });
+    }
+
+    if (!fileName?.trim() || !driveLink?.trim()) {
       return res
         .status(400)
         .json({ message: "Nama file dan Link Drive wajib diisi" });
+    }
+    if (!driveLink.includes("drive.google.com")) {
+      return res.status(400).json({ 
+        message: "Link yang dimasukkan harus berupa link Google Drive yang valid" 
+      });
     }
 
     const task = await Task.findByIdAndUpdate(
@@ -506,25 +446,32 @@ const addAttachmentToTask = async (req, res) => {
       {
         $push: {
           attachments: {
-            fileName,
-            driveLink,
-            uploadedBy: req.user.id, // Diambil dari middleware auth
+            fileName: fileName.trim(),
+            driveLink: driveLink.trim(),
+            uploadedBy: req.user.id,
             uploadedAt: new Date(),
           },
         },
       },
-      { new: true, runValidators: true },
-    );
+      { 
+        new: true, 
+        runValidators: true,
+        select: "attachments" // Optimasi: Hanya ambil field attachments, bukan seluruh dokumen task
+      }
+    ).lean();
 
     if (!task) return res.status(404).json({ message: "Task tidak ditemukan" });
 
     return res.status(200).json({
-      success: true,
-      message: "Link Google Drive berhasil ditambahkan",
+      message: "Lampiran berhasil ditambahkan",
       attachments: task.attachments,
     });
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    console.error("Error addAttachmentToTask:", error.message);
+    return res.status(500).json({ 
+      message: "Gagal menambahkan lampiran",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined
+    });
   }
 };
 
@@ -668,7 +615,7 @@ const addAttachmentToReport = async (req, res) => {
 module.exports = {
   createReport,
   generateReport,
-  getVerifiedTasksForExport,
+  getVerifiedTasks,
   addAttachmentToTask,
   getBatchReportsHistory,
   addAttachmentToReport,

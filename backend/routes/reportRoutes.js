@@ -3,7 +3,7 @@ const { protect } = require("../middlewares/authMiddlewares");
 const {
   createReport,
   generateReport,
-  getVerifiedTasksForExport,
+  getVerifiedTasks,
   addAttachmentToTask,
   getBatchReportsHistory,
   addAttachmentToReport,
@@ -13,8 +13,8 @@ const router = express.Router();
 
 // Tambahkan route sesuai kontroller
 router.post("/create-report", protect, createReport);
-router.post("/export-selected/:reportId", protect, generateReport);
-router.get("/daftar-surat-pengantar", protect, getVerifiedTasksForExport);
+router.post("/generate-report/:reportId", protect, generateReport);
+router.get("/get-verified-tasks", protect, getVerifiedTasks);
 router.post("/add-attachment/:taskId", protect, addAttachmentToTask);
 router.get("/exported-reports", protect, getBatchReportsHistory);
 router.put("/attachment/:reportId", protect, addAttachmentToReport);

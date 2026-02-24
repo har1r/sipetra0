@@ -75,7 +75,7 @@ const ReportHistoryTable = forwardRef(({ onPrint }, ref) => {
     const toastId = toast.loading("Menyiapkan dokumen PDF...");
     try {
       const response = await axiosInstance.post(
-        API_PATHS.REPORTS.EXPORT_SELECTED_TASKS(reportId),
+        API_PATHS.REPORTS.GENERATE_REPORT(reportId),
         {}, // Data body kosong (karena ID ada di URL params)
         {
           responseType: "blob", // Sangat Penting: Agar Axios tidak memproses data sebagai JSON

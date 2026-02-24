@@ -169,6 +169,7 @@ taskSchema.index(
 
 // 5. Index untuk Filter Tanggal
 taskSchema.index({ createdAt: -1 });
+taskSchema.index({ updatedAt: -1 });
 
 // --- MIDDLEWARE: Otomasi Status ---
 taskSchema.pre("save", function (next) {
