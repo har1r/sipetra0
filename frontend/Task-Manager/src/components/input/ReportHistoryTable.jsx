@@ -15,6 +15,7 @@ import {
   HiOutlineChevronLeft,
   HiOutlineChevronRight,
   HiOutlinePrinter,
+  HiOutlineTrash, // Tambahan ikon untuk VOID
 } from "react-icons/hi";
 import toast from "react-hot-toast";
 
@@ -43,7 +44,6 @@ const ReportHistoryTable = forwardRef(({ onPrint }, ref) => {
             },
           },
         );
-        console.log("API Response for Report History:", res.data.reports);
         setReports(res.data.reports || []);
         setPagination(
           res.data.pagination || {
@@ -76,18 +76,16 @@ const ReportHistoryTable = forwardRef(({ onPrint }, ref) => {
     try {
       const response = await axiosInstance.post(
         API_PATHS.REPORTS.GENERATE_REPORT(reportId),
-        {}, // Data body kosong (karena ID ada di URL params)
+        {},
         {
-          responseType: "blob", // Sangat Penting: Agar Axios tidak memproses data sebagai JSON
+          responseType: "blob",
           headers: {
             Accept: "application/pdf",
           },
         },
       );
 
-      // Verifikasi jika yang kembali bukan JSON error (opsional tapi disarankan)
       if (response.data.type === "application/json") {
-        // Jika backend mengirim JSON (berarti error), konversi blob ke text
         const text = await response.data.text();
         const errorData = JSON.parse(text);
         throw new Error(errorData.message);
@@ -95,8 +93,6 @@ const ReportHistoryTable = forwardRef(({ onPrint }, ref) => {
 
       const file = new Blob([response.data], { type: "application/pdf" });
       const fileURL = URL.createObjectURL(file);
-
-      // Buka di tab baru
       window.open(fileURL, "_blank");
 
       toast.success("PDF berhasil dibuka!", { id: toastId });
@@ -128,6 +124,26 @@ const ReportHistoryTable = forwardRef(({ onPrint }, ref) => {
       );
     } catch (err) {
       toast.error(err.response?.data?.message || "Gagal menyimpan link.", {
+        id: toastId,
+      });
+    }
+  };
+
+  // --- REQ: VOID REPORT HANDLER ---
+  const handleVoidReport = async (reportId, batchId) => {
+    const confirmVoid = window.confirm(
+      `Apakah Anda yakin ingin membatalkan (VOID) laporan ${batchId}?\n\nTindakan ini akan melepaskan semua berkas di dalamnya agar bisa didaftarkan kembali ke nomor pengantar baru.`,
+    );
+
+    if (!confirmVoid) return;
+
+    const toastId = toast.loading("Membatalkan laporan...");
+    try {
+      await axiosInstance.patch(API_PATHS.REPORTS.VOID_REPORT(reportId));
+      toast.success(`Laporan ${batchId} berhasil dibatalkan.`, { id: toastId });
+      fetchReports(pagination.currentPage); // Refresh data
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Gagal membatalkan laporan.", {
         id: toastId,
       });
     }
@@ -182,8 +198,12 @@ const ReportHistoryTable = forwardRef(({ onPrint }, ref) => {
                     <td className="px-6 py-5">
                       <div className="flex flex-col">
                         <div className="flex items-center gap-2">
-                          <FaFileInvoice className="text-emerald-500 shrink-0" />
-                          <span className="text-[13px] font-black text-slate-700 leading-none tracking-tight">
+                          <FaFileInvoice
+                            className={`${report.status === "VOID" ? "text-slate-300" : "text-emerald-500"} shrink-0`}
+                          />
+                          <span
+                            className={`text-[13px] font-black leading-none tracking-tight ${report.status === "VOID" ? "text-slate-400 line-through" : "text-slate-700"}`}
+                          >
                             {report.batchId}
                           </span>
                         </div>
@@ -236,15 +256,21 @@ const ReportHistoryTable = forwardRef(({ onPrint }, ref) => {
                     </td>
                     <td className="px-6 py-5 text-right">
                       <div className="flex justify-end gap-2">
-                        {/* TOMBOL CETAK PDF (MEMANGGIL FUNGSI LOCAL) */}
+                        {/* TOMBOL CETAK PDF */}
                         <button
+                          disabled={report.status === "VOID"}
                           onClick={() => handleDownloadPDF(report._id)}
-                          className="p-2.5 rounded-xl bg-emerald-50 text-emerald-600 border border-emerald-100 hover:bg-emerald-600 hover:text-white hover:shadow-md transition-all active:scale-90"
+                          className={`p-2.5 rounded-xl border transition-all active:scale-90 ${
+                            report.status === "VOID"
+                              ? "bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed"
+                              : "bg-emerald-50 text-emerald-600 border-emerald-100 hover:bg-emerald-600 hover:text-white hover:shadow-md"
+                          }`}
                           title="Cetak PDF"
                         >
                           <HiOutlinePrinter size={16} />
                         </button>
 
+                        {/* TOMBOL LINK DRIVE */}
                         <button
                           onClick={() =>
                             handleSetBatchLink(report._id, report.driveLink)
@@ -254,6 +280,19 @@ const ReportHistoryTable = forwardRef(({ onPrint }, ref) => {
                         >
                           <FaLink size={14} />
                         </button>
+
+                        {/* TOMBOL VOID (Hanya muncul jika status FINAL) */}
+                        {report.status === "FINAL" && (
+                          <button
+                            onClick={() =>
+                              handleVoidReport(report._id, report.batchId)
+                            }
+                            className="p-2.5 rounded-xl bg-rose-50 text-rose-600 border border-rose-100 hover:bg-rose-600 hover:text-white hover:shadow-md transition-all active:scale-90"
+                            title="Batalkan Laporan (VOID)"
+                          >
+                            <HiOutlineTrash size={16} />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </tr>

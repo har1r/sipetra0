@@ -35,14 +35,16 @@ export const API_PATHS = {
   },
 
   REPORTS: {
-    // Pengelolaan Surat Pengantar & Export
     CREATE_REPORT: "/api/reports/create-report",
     GENERATE_REPORT: (reportId) => `/api/reports/generate-report/${reportId}`,
+    GENERATE_PARTIAL_MUTATION: (taskId) =>
+      `/api/reports/generate-partial-mutation/${taskId}`,
+    VOID_REPORT: (reportId) => `/api/reports/void-report/${reportId}`,
     GET_VERIFIED_TASKS: "/api/reports/get-verified-tasks",
     EXPORTED_REPORTS: "/api/reports/exported-reports",
 
-    // Lampiran & Link (Unified naming)
-    ADD_ATTACHMENT: (taskId) => `/api/reports/add-attachment/${taskId}`,
+    ADD_ATTACHMENT_TO_TASK: (taskId) =>
+      `/api/reports/add-attachment-to-task/${taskId}`,
     UPDATE_BATCH_ATTACHMENT: (reportId) =>
       `/api/reports/attachment/${reportId}`,
   },

@@ -12,6 +12,7 @@ import {
   HiOutlineLink,
   HiOutlineExternalLink,
   HiFilter,
+  HiOutlinePrinter,
 } from "react-icons/hi";
 import { FaSquareCheck, FaRegSquare } from "react-icons/fa6";
 import toast from "react-hot-toast";
@@ -124,6 +125,64 @@ const ReportHistory = () => {
     setSelectedIds((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
     );
+  };
+
+  // Fungsi baru untuk mengakomodir controller generatePartialMutation
+  const handleDownloadPartialMutation = async (taskId) => {
+    if (!taskId) return toast.error("Task ID tidak valid.");
+
+    const toastId = toast.loading("Menyiapkan Kertas Kerja Mutasi Sebagian...");
+    try {
+      const response = await axiosInstance.post(
+        API_PATHS.REPORTS.GENERATE_PARTIAL_MUTATION(taskId),
+        {}, // Argumen kedua adalah data/body (kosongkan jika tidak ada)
+        {
+          // Argumen ketiga adalah config (SANGAT PENTING)
+          responseType: "blob",
+          headers: {
+            Accept: "application/pdf",
+          },
+        },
+      );
+
+      // Validasi apakah respon benar-benar PDF
+      if (response.data.type === "application/json") {
+        const text = await response.data.text();
+        const errorData = JSON.parse(text);
+        throw new Error(errorData.message);
+      }
+
+      const file = new Blob([response.data], { type: "application/pdf" });
+      const fileURL = URL.createObjectURL(file);
+
+      // Buka di tab baru
+      const pdfWindow = window.open(fileURL, "_blank");
+
+      // Pengecekan jika popup terblokir oleh browser
+      if (!pdfWindow) {
+        toast.error(
+          "Gagal membuka tab baru. Mohon izinkan popup di browser Anda.",
+          { id: toastId },
+        );
+      } else {
+        toast.success("Kertas Kerja berhasil dibuka!", { id: toastId });
+      }
+    } catch (err) {
+      console.error("Print Error:", err);
+      // Jika error datang dari server dalam bentuk blob (JSON error yang terbungkus blob)
+      if (err.response?.data instanceof Blob) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const message = JSON.parse(reader.result).message;
+          toast.error(message || "Gagal mencetak.", { id: toastId });
+        };
+        reader.readAsText(err.response.data);
+      } else {
+        toast.error(err.message || "Gagal mencetak Kertas Kerja.", {
+          id: toastId,
+        });
+      }
+    }
   };
 
   const handleCreateBatch = async () => {
@@ -367,20 +426,40 @@ const ReportHistory = () => {
                         className="px-4 py-4 text-center"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <div className="flex justify-center gap-2">
+                        {/* Satukan semua tombol dalam satu flex container agar sejajar horizontal */}
+                        <div className="flex justify-center items-center gap-2">
+                          {/* Tombol 1: Cetak Mutasi Sebagian */}
+                          {task._id && task.title === "Mutasi Sebagian" && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDownloadPartialMutation(task._id);
+                              }}
+                              title="Cetak Kertas Kerja Mutasi Sebagian"
+                              className="p-2 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-200 hover:bg-emerald-500 hover:text-white transition-all shadow-sm"
+                            >
+                              <HiOutlinePrinter size={14} />
+                            </button>
+                          )}
+
+                          {/* Tombol 2: Link Internal */}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
                             }}
+                            title="Tautan Laporan"
                             className="p-2 rounded-lg bg-slate-50 text-slate-400 border border-slate-200 hover:text-emerald-500 hover:border-emerald-500 transition-all"
                           >
                             <HiOutlineLink size={14} />
                           </button>
+
+                          {/* Tombol 3: External Link (Drive) */}
                           {task.attachments?.[0]?.driveLink && (
                             <a
                               href={task.attachments[0].driveLink}
                               target="_blank"
                               rel="noreferrer"
+                              title="Buka File Lampiran"
                               className="p-2 rounded-lg bg-slate-50 text-slate-400 border border-slate-200 hover:text-blue-500 hover:border-blue-500 transition-all"
                             >
                               <HiOutlineExternalLink size={14} />

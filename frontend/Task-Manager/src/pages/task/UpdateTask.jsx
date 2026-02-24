@@ -231,6 +231,7 @@ const UpdateTask = () => {
           ...formData.mainData,
           nopel: isPengaktifan ? "" : toUpper(formData.mainData.nopel), // Backend handle generate jika kosong & pengaktifan
           oldName: toTitle(formData.mainData.oldName),
+          village: toTitle(formData.mainData.village),
           address: toTitle(formData.mainData.address),
           oldlandWide: toNumber(formData.mainData.oldlandWide),
           oldbuildingWide: toNumber(formData.mainData.oldbuildingWide),

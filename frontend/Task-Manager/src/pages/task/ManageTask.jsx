@@ -105,13 +105,13 @@ const TaskRow = ({ task, index, isExpanded, onToggle, onApprove }) => {
             <div className="flex items-center gap-2 text-[11px] font-bold whitespace-nowrap">
               <span className="text-slate-400 w-4">T:</span>
               <span className="text-slate-700">
-                {task.mainData?.oldlandWide || 0} m²
+                {primaryData.landWide || 0} m²
               </span>
             </div>
             <div className="flex items-center gap-2 text-[11px] font-bold whitespace-nowrap">
               <span className="text-slate-400 w-4">B:</span>
               <span className="text-slate-600">
-                {task.mainData?.oldbuildingWide || 0} m²
+                {primaryData.buildingWide || 0} m²
               </span>
             </div>
           </div>

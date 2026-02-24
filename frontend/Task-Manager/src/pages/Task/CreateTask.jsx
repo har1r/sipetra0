@@ -226,6 +226,7 @@ const CreateTask = () => {
               ? ""
               : toUpper(formData.mainData.nopel),
           oldName: toTitle(formData.mainData.oldName),
+          village: toTitle(formData.mainData.village),
           address: toTitle(formData.mainData.address),
           oldlandWide: toNumber(formData.mainData.oldlandWide),
           oldbuildingWide: toNumber(formData.mainData.oldbuildingWide),

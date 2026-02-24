@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 
 // Mendefinisikan skema untuk menyimpan nomor laporan terakhir pada setiap tahun tertentu (blueprint)
 const reportCounterSchema = new mongoose.Schema({
-  year: { type: Number, required: true, unique: true },
+  year: { type: Number, required: true },
   count: { type: Number, required: true, default: 0 },
 });
 
@@ -16,7 +16,7 @@ const reportSchema = new mongoose.Schema(
   {
     batchId: { type: String, unique: true },
     sequence: { type: Number, required: true },
-    year: { type: Number, required: true, unique: true },
+    year: { type: Number, required: true },
     tasks: [{ type: mongoose.Schema.Types.ObjectId, ref: "Task" }],
     generatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     driveLink: {
@@ -44,7 +44,7 @@ reportSchema.pre("validate", async function (next) {
         { upsert: true, new: true },
       );
 
-      this.sequence = String(counter.count).padStart(3, '0');
+      this.sequence = String(counter.count).padStart(3, "0");
       this.year = currentYear;
       this.batchId = `973/${this.sequence}-UPT.PD.WIL.IV/${currentYear}`;
 
