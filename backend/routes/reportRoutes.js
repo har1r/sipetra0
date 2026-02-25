@@ -1,5 +1,20 @@
 const express = require("express");
 const { protect } = require("../middlewares/authMiddlewares");
+// const createReport =
+//   require("../modules/report/report.controller").createReport;
+// const generateReport =
+//   require("../modules/report/report.controller").generateReport;
+// const generatePartialMutation =
+//   require("../modules/report/report.controller").generatePartialMutation;
+// const getVerifiedTasks =
+//   require("../modules/report/report.controller").getVerifiedTasks;
+// const addAttachmentToTask =
+//   require("../modules/report/report.controller").addAttachmentToTask;
+// const getReports = require("../modules/report/report.controller").getReports;
+// const addAttachmentToReport =
+//   require("../modules/report/report.controller").addAttachmentToReport;
+// const voidReport = require("../modules/report/report.controller").voidReport;
+
 const {
   createReport,
   generateReport,

@@ -24,15 +24,13 @@ const createReport = async (req, res) => {
     if (!user) return res.status(401).json({ message: "Silahkan login." });
     if (!["admin", "peneliti"].includes(user.role))
       return res.status(403).json({ message: "Izin akses ditolak." });
-
     if (!Array.isArray(selectedTaskIds) || selectedTaskIds.length === 0)
       return res
         .status(400)
         .json({ message: "Pilih minimal satu permohonan." });
 
-    // 1. Ambil data Task dan Populasikan data Report-nya untuk cek status
     const selectedTasks = await Task.find({ _id: { $in: selectedTaskIds } })
-      .populate("reportId") // Kita butuh data reportId untuk cek status VOID
+      .populate("reportId")
       .session(session);
 
     if (selectedTasks.length !== selectedTaskIds.length) {
