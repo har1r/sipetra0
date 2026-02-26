@@ -45,6 +45,7 @@ const findAllReports = async ({ filters, sortDirection, skip, limit }) => {
 };
 // Fungsi untuk getReports
 
+// Fungsi untuk createReports
 const findTasksWithReports = async (taskIds) => {
   return await Task.find({ _id: { $in: taskIds } })
     .populate({
@@ -69,6 +70,39 @@ const updateTasksReportReference = async (taskIds, reportId) => {
     { $set: { reportId } },
   );
 };
+// Fungsi untuk createReports
+
+// Fungsi untuk generateReport
+const getReportForPdf = async (reportId) => {
+  return await Report.findById(reportId)
+    .populate({
+      path: "tasks"
+    })
+    .lean();
+};
+// Fungsi untuk generateReport
+
+// Fungsi untuk generatePartialMutations
+const findTaskById = async (taskId) => {
+  return await Task.findById(taskId)
+    .select("title mainData additionalData")
+    .lean();
+};
+// Fungsi untuk generatePartialMutations
+
+const pushAttachment = async (taskId, attachmentData) => {
+  return await Task.findByIdAndUpdate(
+    taskId,
+    { 
+      $push: { attachments: attachmentData } 
+    },
+    { 
+      new: true, 
+      runValidators: true, 
+      select: "attachments" 
+    }
+  ).lean();
+};
 
 module.exports = {
   findVerifiedTasks,
@@ -77,4 +111,7 @@ module.exports = {
   getLastSequenceInYear,
   createReportDocument,
   updateTasksReportReference,
+  getReportForPdf,
+  findTaskById,
+  pushAttachment,
 };

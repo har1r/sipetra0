@@ -1,4 +1,5 @@
 const repository = require("../report/report.repository");
+const { formatDateId } = require("../../utils/formatDateId")
 
 // Fungsi untuk getVerifiedTasks
 const getVerifiedTasksService = async (queryParams) => {
@@ -145,6 +146,7 @@ const getAllReportsService = async (queryParams) => {
 };
 // Fungsi untuk getReports
 
+// Fungsi untuk createReports
 const processCreateReport = async (user, selectedTaskIds) => {
   const selectedTasks = await repository.findTasksWithReports(selectedTaskIds);
 
@@ -199,9 +201,109 @@ const processCreateReport = async (user, selectedTaskIds) => {
 
   return { reportId: newReport._id, alreadyExists: false };
 };
+// Fungsi untuk createReports
+
+// Fungsi untuk generateReport
+const preparePdfData = async (reportId) => {
+  const report = await repository.getReportForPdf(reportId);
+  if (!report) throw new Error("Surat pengantar tidak ditemukan");
+
+  const selectedTasks = report.tasks || [];
+  const rawServiceTitle = selectedTasks[0]?.title || "-";
+  const fixServiceTitle = rawServiceTitle.replace(/_/g, " ");
+
+  const tableRows = [];
+  let totalData = 0;
+
+  selectedTasks.forEach((task) => {
+    const adds = task.additionalData?.length > 0 ? task.additionalData : [{}];
+    totalData += adds.length;
+
+    adds.forEach((addData) => {
+      tableRows.push([
+        tableRows.length + 1,
+        task.mainData?.nopel || "-",
+        task.mainData?.nop || "-",
+        addData.newName || "-",
+        task.mainData?.oldName || "-",
+        task.mainData?.address || "-",
+        task.mainData?.village || "-",
+        task.mainData?.subdistrict || "-",
+        fixServiceTitle,
+        addData.landWide || "0",
+        addData.buildingWide || "0",
+        addData.certificate || "-",
+      ]);
+    });
+  });
+
+  return {
+    report,
+    fixServiceTitle,
+    tableRows,
+    totalData,
+    formatDate: formatDateId(report.createdAt)
+  };
+};
+// Fungsi untuk generateReport
+
+// Fungsi untuk generatePartialMutations
+const preparePartialMutationData = async (taskId) => {
+  const task = await repository.findTaskById(taskId);
+  console.log("isis", task)
+  if (!task) throw new Error("Data permohonan tidak ditemukan");
+
+  const pieces = task.additionalData || [];
+
+  const totalUsedLand = pieces.reduce((sum, piece) => {
+    return sum + (parseFloat(piece.landWide) || 0);
+  }, 0);
+
+  const originalLandWide = parseFloat(task.mainData?.oldlandWide) || 0;
+
+  const remainingLand = originalLandWide - totalUsedLand;
+
+  return {
+    task,
+    pieces,
+    remainingLand: remainingLand > 0 ? remainingLand.toString() : "0",
+    totalUsedLand
+  };
+};
+// Fungsi untuk generatePartialMutations
+
+const addAttachmentTask = async (taskId, body, userId) => {
+  const { fileName, driveLink } = body;
+
+  if (!fileName?.trim() || !driveLink?.trim()) {
+    throw new Error("Nama file dan Link Drive wajib diisi");
+  }
+
+  if (!driveLink.includes("drive.google.com")) {
+    throw new Error("Link yang dimasukkan harus berupa link Google Drive yang valid");
+  }
+
+  const attachmentData = {
+    fileName: fileName.trim(),
+    driveLink: driveLink.trim(),
+    uploadedBy: userId,
+    uploadedAt: new Date(),
+  };
+
+  const updatedTask = await repository.pushAttachment(taskId, attachmentData);
+
+  if (!updatedTask) {
+    throw new Error("Permohonan tidak ditemukan");
+  }
+
+  return updatedTask.attachments;
+};
 
 module.exports = {
   getVerifiedTasksService,
   getAllReportsService,
   processCreateReport,
+  preparePdfData,
+  preparePartialMutationData,
+  addAttachmentTask,
 };
