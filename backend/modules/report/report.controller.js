@@ -1,125 +1,62 @@
-const reportService = require("./report.service");
+const service = require("../report/report.service");
 
-exports.createReport = async (req, res, next) => {
+const getVerifiedTasks = async (req, res, next) => {
   try {
-    const result = await reportService.createReport({
-      user: req.user,
-      selectedTaskIds: req.body.selectedTaskIds,
+    const result = await service.getVerifiedTasksService(req.query);
+    console.log(result);
+    res.status(200).json({ result });
+  } catch (error) {
+    console.log("FULL ERROR OBJECT:", error); // Lihat bagian 'message' atau 'reason'
+    return res.status(500).json({
+      message: error.message,
+      stack: error.stack,
     });
+  }
+};
+
+const getReports = async (req, res, next) => {
+  try {
+    const result = await service.getAllReportsService(req.query);
 
     return res.status(200).json(result);
   } catch (error) {
-    next(error);
+    console.log("FULL ERROR OBJECT:", error);
+    return res.status(500).json({
+      message: error.message,
+      stack: error.stack,
+    });
   }
 };
 
-exports.generateReport = async (req, res, next) => {
+const createReports = async (req, res, next) => {
   try {
-    const result = await reportService.generateReport({
-      user: req.user,
-      reportId: req.params.reportId,
-    });
+    const { selectedTaskIds } = req.body;
+    const user = req.user;
 
-    if (!result?.doc) {
-      throw new Error("Gagal membuat laporan PDF.");
+    if (!user) return res.status(401).json({ message: "Silahkan login." });
+    if (!["admin", "peneliti"].includes(user.role)) {
+      return res.status(403).json({ message: "Izin akses ditolak." });
     }
 
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename=${result.filename}`,
-    );
+    const result = await service.processCreateReport(user, selectedTaskIds);
 
-    result.doc.pipe(res);
-    result.doc.end();
-  } catch (error) {
-    next(error);
-  }
-};
-
-exports.generatePartialMutation = async (req, res, next) => {
-  try {
-    const result = await reportService.generatePartialMutation({
-      taskId: req.params.taskId,
+    return res.status(result.alreadyExists ? 200 : 201).json({
+      message: result.alreadyExists
+        ? "Menggunakan nomor pengantar yang sudah ada."
+        : "Nomor surat pengantar berhasil dibuat.",
+      data: { batchId: result.reportId },
     });
-
-    if (!result?.doc) {
-      throw new Error("Failed to generate PDF document");
-    }
-
-    res.setHeader("Content-Type", "application/pdf");
-    res.setHeader(
-      "Content-Disposition",
-      `attachment; filename=${result.filename}`,
-    );
-
-    result.doc.on("error", (err) => {
-      next(err);
+  } catch (error) {
+    console.log("FULL ERROR OBJECT:", error);
+    return res.status(500).json({
+      message: error.message,
+      stack: error.stack,
     });
-
-    result.doc.pipe(res);
-    result.doc.end();
-  } catch (error) {
-    next(error);
   }
 };
 
-exports.getVerifiedTasks = async (req, res, next) => {
-  try {
-    const result = await taskService.getVerifiedTasks(req.query);
-    res.status(200).json(result);
-  } catch (error) {
-    next(error);
-  }
-};
-
-exports.addAttachmentToTask = async (req, res, next) => {
-  try {
-    const result = await taskService.addAttachmentToTask({
-      user: req.user,
-      taskId: req.params.taskId,
-      fileName: req.body.fileName,
-      driveLink: req.body.driveLink,
-    });
-
-    res.status(200).json(result);
-  } catch (error) {
-    next(error);
-  }
-};
-
-exports.getReports = async (req, res, next) => {
-  try {
-    const result = await reportService.getReports(req.query);
-    res.status(200).json(result);
-  } catch (error) {
-    next(error);
-  }
-};
-
-exports.addAttachmentToReport = async (req, res, next) => {
-  try {
-    const result = await reportService.addAttachmentToReport({
-      user: req.user,
-      reportId: req.params.reportId,
-      driveLink: req.body.driveLink,
-    });
-
-    res.status(200).json(result);
-  } catch (error) {
-    next(error);
-  }
-};
-
-exports.voidReport = async (req, res, next) => {
-  try {
-    const result = await reportService.voidReport({
-      user: req.user,
-      reportId: req.params.reportId,
-    });
-
-    res.status(200).json(result);
-  } catch (error) {
-    next(error);
-  }
+module.exports = {
+  getVerifiedTasks,
+  getReports,
+  createReports,
 };

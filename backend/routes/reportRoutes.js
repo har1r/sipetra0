@@ -1,27 +1,17 @@
 const express = require("express");
 const { protect } = require("../middlewares/authMiddlewares");
-// const createReport =
-//   require("../modules/report/report.controller").createReport;
-// const generateReport =
-//   require("../modules/report/report.controller").generateReport;
-// const generatePartialMutation =
-//   require("../modules/report/report.controller").generatePartialMutation;
-// const getVerifiedTasks =
-//   require("../modules/report/report.controller").getVerifiedTasks;
-// const addAttachmentToTask =
-//   require("../modules/report/report.controller").addAttachmentToTask;
-// const getReports = require("../modules/report/report.controller").getReports;
-// const addAttachmentToReport =
-//   require("../modules/report/report.controller").addAttachmentToReport;
-// const voidReport = require("../modules/report/report.controller").voidReport;
-
 const {
-  createReport,
+  getVerifiedTasks,
+  getReports,
+  createReports,
+} = require("../modules/report/report.controller");
+const {
+  // createReport,
   generateReport,
   generatePartialMutation,
-  getVerifiedTasks,
+  // getVerifiedTasks,
   addAttachmentToTask,
-  getReports,
+  // getReports,
   addAttachmentToReport,
   voidReport,
 } = require("../controllers/reportControllers");
@@ -29,7 +19,7 @@ const {
 const router = express.Router();
 
 // Tambahkan route sesuai kontroller
-router.post("/create-report", protect, createReport);
+router.post("/create-report", protect, createReports);
 router.post("/generate-report/:reportId", protect, generateReport);
 router.post(
   "/generate-partial-mutation/:taskId",

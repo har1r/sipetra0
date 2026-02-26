@@ -15,21 +15,29 @@ import {
   HiOutlineChevronLeft,
   HiOutlineChevronRight,
   HiOutlinePrinter,
-  HiOutlineTrash, // Tambahan ikon untuk VOID
+  HiOutlineTrash,
 } from "react-icons/hi";
 import toast from "react-hot-toast";
 
 const ReportHistoryTable = forwardRef(({ onPrint }, ref) => {
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [filterBatch, setFilterBatch] = useState("");
+
+  // State Filter Baru
+  const [filters, setFilters] = useState({
+    batchId: "",
+    status: "",
+    startDate: "",
+    endDate: "",
+  });
+
   const [pagination, setPagination] = useState({
     currentPage: 1,
     totalPages: 1,
     totalData: 0,
   });
 
-  // --- REQ 1: GET ALL REPORTS (Untuk List Tabel) ---
+  // --- REQ 1: GET ALL REPORTS (Dengan Multi-Filter) ---
   const fetchReports = useCallback(
     async (page = 1) => {
       setLoading(true);
@@ -38,9 +46,12 @@ const ReportHistoryTable = forwardRef(({ onPrint }, ref) => {
           API_PATHS.REPORTS.EXPORTED_REPORTS,
           {
             params: {
-              batchId: filterBatch,
               page: page,
               limit: 10,
+              batchId: filters.batchId.trim() || undefined,
+              status: filters.status || undefined,
+              startDate: filters.startDate || undefined,
+              endDate: filters.endDate || undefined,
             },
           },
         );
@@ -58,17 +69,25 @@ const ReportHistoryTable = forwardRef(({ onPrint }, ref) => {
         setLoading(false);
       }
     },
-    [filterBatch],
+    [filters],
   );
 
   useImperativeHandle(ref, () => ({
     refresh: () => fetchReports(1),
   }));
 
+  // Debounce Effect agar tidak spam API saat mengetik
   useEffect(() => {
-    const timer = setTimeout(() => fetchReports(1), filterBatch ? 500 : 0);
+    const timer = setTimeout(() => {
+      fetchReports(1);
+    }, 500);
     return () => clearTimeout(timer);
-  }, [filterBatch, fetchReports]);
+  }, [filters, fetchReports]);
+
+  const handleFilterChange = (e) => {
+    const { name, value } = e.target;
+    setFilters((prev) => ({ ...prev, [name]: value }));
+  };
 
   // --- REQ 2 & 3: GET BY ID & GENERATE PDF ---
   const handleDownloadPDF = async (reportId) => {
@@ -129,7 +148,6 @@ const ReportHistoryTable = forwardRef(({ onPrint }, ref) => {
     }
   };
 
-  // --- REQ: VOID REPORT HANDLER ---
   const handleVoidReport = async (reportId, batchId) => {
     const confirmVoid = window.confirm(
       `Apakah Anda yakin ingin membatalkan (VOID) laporan ${batchId}?\n\nTindakan ini akan melepaskan semua berkas di dalamnya agar bisa didaftarkan kembali ke nomor pengantar baru.`,
@@ -141,7 +159,7 @@ const ReportHistoryTable = forwardRef(({ onPrint }, ref) => {
     try {
       await axiosInstance.patch(API_PATHS.REPORTS.VOID_REPORT(reportId));
       toast.success(`Laporan ${batchId} berhasil dibatalkan.`, { id: toastId });
-      fetchReports(pagination.currentPage); // Refresh data
+      fetchReports(pagination.currentPage);
     } catch (err) {
       toast.error(err.response?.data?.message || "Gagal membatalkan laporan.", {
         id: toastId,
@@ -151,17 +169,67 @@ const ReportHistoryTable = forwardRef(({ onPrint }, ref) => {
 
   return (
     <div className="space-y-6">
-      {/* --- SEARCH BAR --- */}
-      <div className="px-4 pt-4">
-        <div className="relative max-w-md">
-          <HiOutlineSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Cari No. Batch..."
-            className="w-full pl-11 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-700 outline-none focus:ring-4 focus:ring-emerald-500/5 focus:border-emerald-500 transition-all placeholder:text-slate-300"
-            value={filterBatch}
-            onChange={(e) => setFilterBatch(e.target.value)}
-          />
+      {/* --- ADVANCED FILTER BAR --- */}
+      <div className="p-6 bg-slate-50/50 border-b border-slate-100">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
+          <div className="lg:col-span-2 space-y-1.5">
+            <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">
+              Cari No. Batch
+            </label>
+            <div className="relative">
+              <HiOutlineSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                name="batchId"
+                type="text"
+                placeholder="Contoh: BTCH-2024..."
+                className="w-full pl-11 pr-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold outline-none focus:border-emerald-500 transition-all shadow-sm"
+                value={filters.batchId}
+                onChange={handleFilterChange}
+              />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">
+              Status
+            </label>
+            <select
+              name="status"
+              className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-xl text-xs font-semibold outline-none focus:border-emerald-500 shadow-sm"
+              value={filters.status}
+              onChange={handleFilterChange}
+            >
+              <option value="">Semua Status</option>
+              <option value="FINAL">FINAL</option>
+              <option value="VOID">VOID</option>
+            </select>
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">
+              Dari Tanggal
+            </label>
+            <input
+              name="startDate"
+              type="date"
+              className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold outline-none shadow-sm"
+              value={filters.startDate}
+              onChange={handleFilterChange}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[10px] font-bold text-slate-400 uppercase ml-1">
+              Sampai Tanggal
+            </label>
+            <input
+              name="endDate"
+              type="date"
+              className="w-full px-4 py-2 bg-white border border-slate-200 rounded-xl text-xs font-semibold outline-none shadow-sm"
+              value={filters.endDate}
+              onChange={handleFilterChange}
+            />
+          </div>
         </div>
       </div>
 
@@ -209,11 +277,11 @@ const ReportHistoryTable = forwardRef(({ onPrint }, ref) => {
                         </div>
                         <div className="flex items-center gap-2 mt-2">
                           <span className="text-[10px] font-bold text-slate-400 uppercase">
-                            Oleh: {report.admin}
+                            Oleh: {report.generatedByName}
                           </span>
                           <span className="text-slate-200">|</span>
                           <span className="text-[10px] font-bold text-slate-400 uppercase">
-                            {formatDateId(report.tanggalCetak)}
+                            {formatDateId(report.updatedAt)}
                           </span>
                         </div>
                       </div>
@@ -256,7 +324,6 @@ const ReportHistoryTable = forwardRef(({ onPrint }, ref) => {
                     </td>
                     <td className="px-6 py-5 text-right">
                       <div className="flex justify-end gap-2">
-                        {/* TOMBOL CETAK PDF */}
                         <button
                           disabled={report.status === "VOID"}
                           onClick={() => handleDownloadPDF(report._id)}
@@ -270,7 +337,6 @@ const ReportHistoryTable = forwardRef(({ onPrint }, ref) => {
                           <HiOutlinePrinter size={16} />
                         </button>
 
-                        {/* TOMBOL LINK DRIVE */}
                         <button
                           onClick={() =>
                             handleSetBatchLink(report._id, report.driveLink)
@@ -281,7 +347,6 @@ const ReportHistoryTable = forwardRef(({ onPrint }, ref) => {
                           <FaLink size={14} />
                         </button>
 
-                        {/* TOMBOL VOID (Hanya muncul jika status FINAL) */}
                         {report.status === "FINAL" && (
                           <button
                             onClick={() =>

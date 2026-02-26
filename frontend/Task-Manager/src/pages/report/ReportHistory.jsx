@@ -83,7 +83,7 @@ const ReportHistory = () => {
         },
       );
 
-      setTasks(res?.data?.tasks || []);
+      setTasks(res?.data?.result.tasks || []);
       setTotalData(res?.data?.pagination?.totalData || 0);
       setTotalPages(res?.data?.pagination?.totalPages || 1);
     } catch (err) {
