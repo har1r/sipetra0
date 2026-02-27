@@ -1,5 +1,5 @@
 const repository = require("../report/report.repository");
-const { formatDateId } = require("../../utils/formatDateId")
+const { formatDateId } = require("../../utils/formatDateId");
 
 // Fungsi untuk getVerifiedTasks
 const getVerifiedTasksService = async (queryParams) => {
@@ -242,7 +242,7 @@ const preparePdfData = async (reportId) => {
     fixServiceTitle,
     tableRows,
     totalData,
-    formatDate: formatDateId(report.createdAt)
+    formatDate: formatDateId(report.createdAt),
   };
 };
 // Fungsi untuk generateReport
@@ -250,7 +250,7 @@ const preparePdfData = async (reportId) => {
 // Fungsi untuk generatePartialMutations
 const preparePartialMutationData = async (taskId) => {
   const task = await repository.findTaskById(taskId);
-  console.log("isis", task)
+  console.log("isis", task);
   if (!task) throw new Error("Data permohonan tidak ditemukan");
 
   const pieces = task.additionalData || [];
@@ -267,7 +267,7 @@ const preparePartialMutationData = async (taskId) => {
     task,
     pieces,
     remainingLand: remainingLand > 0 ? remainingLand.toString() : "0",
-    totalUsedLand
+    totalUsedLand,
   };
 };
 // Fungsi untuk generatePartialMutations
@@ -280,7 +280,9 @@ const addAttachmentTask = async (taskId, body, userId) => {
   }
 
   if (!driveLink.includes("drive.google.com")) {
-    throw new Error("Link yang dimasukkan harus berupa link Google Drive yang valid");
+    throw new Error(
+      "Link yang dimasukkan harus berupa link Google Drive yang valid",
+    );
   }
 
   const attachmentData = {

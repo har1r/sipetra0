@@ -39,8 +39,8 @@ export const API_PATHS = {
     GENERATE_REPORT: (reportId) => `/api/reports/generate-report/${reportId}`,
     GENERATE_PARTIAL_MUTATION: (taskId) =>
       `/api/reports/generate-partial-mutation/${taskId}`,
-    VOID_REPORT: (reportId) => `/api/reports/void-report/${reportId}`,
     GET_VERIFIED_TASKS: "/api/reports/get-verified-tasks",
+    VOID_REPORT: (reportId) => `/api/reports/void-report/${reportId}`,
     EXPORTED_REPORTS: "/api/reports/exported-reports",
 
     ADD_ATTACHMENT_TO_TASK: (taskId) =>
