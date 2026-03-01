@@ -1,5 +1,5 @@
 // Alamat URL Utama
-export const BASE_URL = "http://localhost:8000";
+export const BASE_URL = "https://c7qrlm2d-8000.asse.devtunnels.ms/";
 
 /**
  * === 🛠️ API PATHS REGISTRY ===
@@ -40,12 +40,12 @@ export const API_PATHS = {
     GENERATE_PARTIAL_MUTATION: (taskId) =>
       `/api/reports/generate-partial-mutation/${taskId}`,
     GET_VERIFIED_TASKS: "/api/reports/get-verified-tasks",
+    GET_REPORTS: "/api/reports/get-reports",
     VOID_REPORT: (reportId) => `/api/reports/void-report/${reportId}`,
-    EXPORTED_REPORTS: "/api/reports/exported-reports",
 
     ADD_ATTACHMENT_TO_TASK: (taskId) =>
       `/api/reports/add-attachment-to-task/${taskId}`,
-    UPDATE_BATCH_ATTACHMENT: (reportId) =>
-      `/api/reports/attachment/${reportId}`,
+    ADD_ATTACHMENT_TO_REPORT: (reportId) =>
+      `/api/reports/add-attachment-to-report/${reportId}`,
   },
 };

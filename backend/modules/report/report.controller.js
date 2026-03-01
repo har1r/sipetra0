@@ -5,7 +5,7 @@ const service = require("../report/report.service");
 const getVerifiedTasks = async (req, res, next) => {
   try {
     const result = await service.getVerifiedTasksService(req.query);
-
+    
     res.status(200).json({ result });
   } catch (error) {
     console.log("FULL ERROR OBJECT:", error); // Lihat bagian 'message' atau 'reason'
@@ -20,7 +20,7 @@ const getReports = async (req, res, next) => {
   try {
     const result = await service.getAllReportsService(req.query);
 
-    return res.status(200).json(result);
+    return res.status(200).json({ result });
   } catch (error) {
     console.log("FULL ERROR OBJECT:", error);
     return res.status(500).json({
@@ -485,7 +485,7 @@ const addAttachmentToTasks = async (req, res) => {
       return res.status(403).json({ message: "Izin akses ditolak." });
     }
 
-    const attachments = await service.addAttachmentTask(
+    const attachment = await service.addAttachmentTask(
       taskId,
       req.body,
       user._id,
@@ -493,10 +493,64 @@ const addAttachmentToTasks = async (req, res) => {
 
     return res.status(200).json({
       message: "Lampiran berhasil ditambahkan",
-      attachments,
+      attachment,
     });
   } catch (error) {
     console.log("FULL ERROR OBJECT:", error);
+    return res.status(500).json({
+      message: error.message,
+      stack: error.stack,
+    });
+  }
+};
+
+const addAttachmentToReports = async (req, res) => {
+  try {
+    const user = req.user;
+    const { reportId } = req.params;
+
+    if (!user) return res.status(401).json({ message: "Silahkan login." });
+    if (!["admin", "pengarsip"].includes(user.role)) {
+      return res.status(403).json({ message: "Izin akses ditolak." });
+    }
+
+    const attachment = await service.addAttachmentReport(
+      reportId,
+      req.body,
+      user._id,
+    );
+
+    return res.status(200).json({
+      message: "Lampiran berhasil ditambahkan",
+      attachment,
+    });
+  } catch (error) {
+    console.log("FULL ERROR OBJECT:", error);
+    return res.status(500).json({
+      message: error.message,
+      stack: error.stack,
+    });
+  }
+};
+
+const voidReport = async (req, res) => {
+  try {
+    const { reportId } = req.params;
+    const user = req.user;
+
+    if (!user || !["admin", "peneliti"].includes(user.role)) {
+      return res.status(403).json({ message: "Izin akses ditolak." });
+    }
+
+    const result = await service.PrepareVoidReport(reportId);
+
+    return res.status(200).json({
+      message: "Surat pengantar berhasil dibatalkan (VOID) dan permohonan telah dilepaskan.",
+      batchId: result.reportId,
+    });
+
+  } catch (error) {
+console.log("FULL ERROR OBJECT:", error);
     return res.status(500).json({
       message: error.message,
       stack: error.stack,
@@ -511,4 +565,6 @@ module.exports = {
   generateReports,
   generatePartialMutations,
   addAttachmentToTasks,
+  addAttachmentToReports,
+  voidReport
 };

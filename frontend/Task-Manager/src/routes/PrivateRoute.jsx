@@ -1,6 +1,6 @@
 import React, { useContext } from "react";
 import { Outlet, Navigate, useLocation } from "react-router-dom";
-import UserContext from "../context/UserContexts";
+import UserContext from "../contexts/UserContexts";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
 
 const normalizeRole = (v) =>

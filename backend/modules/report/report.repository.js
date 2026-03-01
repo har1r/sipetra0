@@ -13,7 +13,7 @@ const findVerifiedTasks = async ({ filters, sortDirection, skip, limit }) => {
         path: "reportId",
         select: "batchId",
       })
-      .select("title mainData additionalData updatedAt reportId")
+      .select("title mainData additionalData attachment updatedAt reportId")
       .lean(),
   ]);
 
@@ -37,7 +37,7 @@ const findAllReports = async ({ filters, sortDirection, skip, limit }) => {
         path: "generatedBy",
         select: "name",
       })
-      .select("batchId status updatedAt")
+      .select("batchId status updatedAt attachment")
       .lean(),
   ]);
 
@@ -90,18 +90,55 @@ const findTaskById = async (taskId) => {
 };
 // Fungsi untuk generatePartialMutations
 
-const pushAttachment = async (taskId, attachmentData) => {
+// Funsi untuk addAttachmentToTasks
+const setAttachmentTask = async (taskId, attachmentData) => {
   return await Task.findByIdAndUpdate(
     taskId,
     { 
-      $push: { attachments: attachmentData } 
+      $set: { attachment: attachmentData } 
     },
     { 
       new: true, 
       runValidators: true, 
-      select: "attachments" 
+      select: "attachment" 
     }
   ).lean();
+};
+// Funsi untuk addAttachmentToTasks
+
+// Fungsi unutk addAttachmentToReport
+const setAttachmentReport = async (reportId, attachmentData) => {
+  return await Report.findByIdAndUpdate(
+    reportId,
+    {
+      $set: {attachment: attachmentData}
+    },
+    {
+      new: true, 
+      runValidators: true, 
+      select: "attachment" 
+    }
+  ).lean();
+};
+// Fungsi unutk addAttachmentToReport
+
+const findReportById = async (reportId) => {
+  return await Report.findById(reportId);
+};
+
+const updateReportStatus = async (reportId, status) => {
+  return await Report.findByIdAndUpdate(
+    reportId,
+    { status: status },
+    { new: true }
+  );
+};
+
+const detachTasksFromReport = async (reportId) => {
+  return await Task.updateMany(
+    { reportId: reportId },
+    { $set: { reportId: null } }
+  );
 };
 
 module.exports = {
@@ -113,5 +150,9 @@ module.exports = {
   updateTasksReportReference,
   getReportForPdf,
   findTaskById,
-  pushAttachment,
+  setAttachmentTask,
+  setAttachmentReport,
+  findReportById,
+  updateReportStatus,
+  detachTasksFromReport
 };

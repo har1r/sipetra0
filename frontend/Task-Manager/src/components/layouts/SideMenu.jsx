@@ -1,6 +1,6 @@
 import React, { useContext, useMemo, useCallback } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import UserContext from "../../context/UserContexts";
+import UserContext from "../../contexts/UserContexts";
 // Import getMenuByRole, kita tidak butuh ADMIN_MENU & USER_MENU lagi secara langsung
 import { getMenuByRole } from "../../utils/data";
 import { HiOutlineLogout } from "react-icons/hi";

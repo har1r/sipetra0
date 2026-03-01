@@ -6,7 +6,9 @@ const {
   createReports,
   generateReports,
   generatePartialMutations,
-  addAttachmentToTasks
+  addAttachmentToTasks,
+  addAttachmentToReports,
+  voidReport
 } = require("../modules/report/report.controller");
 const {
   // createReport,
@@ -15,8 +17,8 @@ const {
   // getVerifiedTasks,
   // addAttachmentToTask,
   // getReports,
-  addAttachmentToReport,
-  voidReport,
+  // addAttachmentToReport,
+  // voidReport,
 } = require("../controllers/reportControllers");
 
 const router = express.Router();
@@ -30,9 +32,9 @@ router.post(
   generatePartialMutations,
 );
 router.get("/get-verified-tasks", protect, getVerifiedTasks);
+router.get("/get-reports", protect, getReports);
 router.post("/add-attachment-to-task/:taskId", protect, addAttachmentToTasks);
-router.get("/exported-reports", protect, getReports);
-router.put("/attachment/:reportId", protect, addAttachmentToReport);
+router.post("/add-attachment-to-report/:reportId", protect, addAttachmentToReports);
 router.patch("/void-report/:reportId", protect, voidReport);
 
 module.exports = router;

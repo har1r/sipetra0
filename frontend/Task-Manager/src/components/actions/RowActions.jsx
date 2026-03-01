@@ -9,7 +9,7 @@ import {
   HiOutlineTrash,
   HiOutlineXMark,
 } from "react-icons/hi2";
-import UserContext from "../../context/UserContexts";
+import UserContext from "../../contexts/UserContexts";
 import axiosInstance from "../../utils/axiosInstance";
 import { API_PATHS } from "../../utils/apiPaths";
 import toast from "react-hot-toast";

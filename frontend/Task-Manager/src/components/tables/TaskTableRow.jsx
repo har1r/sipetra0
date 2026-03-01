@@ -7,8 +7,8 @@ import {
 import { FaSquareCheck, FaRegSquare } from "react-icons/fa6";
 import { formatDateId } from "../../utils/formatDateId";
 
-const ReportTableRow = ({ task, isSelected, onSelect, onPrint, onAddLink }) => {
-  const hasAttachment = task.attachments && task.attachments.length > 0;
+const TaskTableRow = ({ task, isSelected, onSelect, onPrint, onAddLink }) => {
+  const hasAttachment = !!task.attachment;
 
   const renderBatchStatus = () => {
     if (task.reportId) {
@@ -112,7 +112,7 @@ const ReportTableRow = ({ task, isSelected, onSelect, onPrint, onAddLink }) => {
           {/* Tombol Buka Link Drive (Hanya muncul jika ada link) */}
           {hasAttachment && (
             <a
-              href={task.attachments[0].driveLink}
+              href={task.attachment.driveLink}
               target="_blank"
               rel="noreferrer"
               title="Buka Link Drive"
@@ -127,4 +127,4 @@ const ReportTableRow = ({ task, isSelected, onSelect, onPrint, onAddLink }) => {
   );
 };
 
-export default React.memo(ReportTableRow);
+export default React.memo(TaskTableRow);

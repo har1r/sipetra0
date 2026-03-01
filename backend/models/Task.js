@@ -3,7 +3,7 @@ const mongoose = require("mongoose");
 /**
  * 1. Sub-Schema: Lampiran File
  */
-const fileAttachmentSchema = new mongoose.Schema({
+const taskAttachmentSchema = new mongoose.Schema({
   fileName: { type: String, required: true },
   driveLink: { type: String, trim: true, required: true },
   uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
@@ -87,7 +87,10 @@ const taskSchema = new mongoose.Schema(
       oldbuildingWide: { type: Number, required: true, min: 0 },
     },
     additionalData: [additionalDataSchema],
-    attachments: [fileAttachmentSchema],
+    attachment: {
+      type: taskAttachmentSchema,
+      default: null
+    },
     currentStage: {
       type: String,
       enum: [

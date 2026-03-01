@@ -18,9 +18,6 @@ const AddAttachmentModal = ({
             <h3 className="text-lg font-bold text-slate-800">
               Tambah Lampiran
             </h3>
-            <p className="text-[10px] text-slate-500 font-semibold uppercase tracking-widest mt-0.5">
-              Nopel: {formData.nopel}
-            </p>
           </div>
           <button
             onClick={onClose}

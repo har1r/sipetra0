@@ -250,7 +250,7 @@ const preparePdfData = async (reportId) => {
 // Fungsi untuk generatePartialMutations
 const preparePartialMutationData = async (taskId) => {
   const task = await repository.findTaskById(taskId);
-  console.log("isis", task);
+
   if (!task) throw new Error("Data permohonan tidak ditemukan");
 
   const pieces = task.additionalData || [];
@@ -272,6 +272,7 @@ const preparePartialMutationData = async (taskId) => {
 };
 // Fungsi untuk generatePartialMutations
 
+// Funsi untuk addAttachmentToTasks
 const addAttachmentTask = async (taskId, body, userId) => {
   const { fileName, driveLink } = body;
 
@@ -292,13 +293,61 @@ const addAttachmentTask = async (taskId, body, userId) => {
     uploadedAt: new Date(),
   };
 
-  const updatedTask = await repository.pushAttachment(taskId, attachmentData);
+  const updatedTask = await repository.setAttachmentTask(taskId, attachmentData);
 
   if (!updatedTask) {
     throw new Error("Permohonan tidak ditemukan");
   }
 
-  return updatedTask.attachments;
+  return updatedTask.attachment;
+};
+// Funsi untuk addAttachmentToTasks
+
+// Fungsi unutk addAttachmentToReport
+const addAttachmentReport = async (reportId, body, userId) => {
+  const { fileName, driveLink } = body;
+
+  if (!fileName?.trim() || !driveLink?.trim()) {
+    throw new Error("Nama file dan Link Drive wajib diisi");
+  }
+
+  if (!driveLink.includes("drive.google.com")) {
+    throw new Error(
+      "Link yang dimasukkan harus berupa link Google Drive yang valid",
+    );
+  }
+
+  const attachmentData = {
+    fileName: fileName.trim(),
+    driveLink: driveLink.trim(),
+    uploadedBy: userId,
+    uploadedAt: new Date(),
+  };
+
+  const updatedReport = await repository.setAttachmentReport(reportId, attachmentData);
+
+  if (!updatedReport) {
+    throw new Error("Surat pengantar tidak ditemukan");
+  }
+
+  return updatedReport.attachment;
+};
+// Fungsi unutk addAttachmentToReport
+
+const PrepareVoidReport = async (reportId) => {
+  const report = await repository.findReportById(reportId);
+  if (!report) {
+    throw new Error("Surat pengantar tidak ditemukan");
+  }
+
+  if (report.status === "VOID") {
+    throw new Error("Surat pengantar sudah berstatus void atau dihapus");
+  }
+
+  await repository.updateReportStatus(reportId, "VOID");
+  await repository.detachTasksFromReport(reportId);
+
+  return { reportId };
 };
 
 module.exports = {
@@ -308,4 +357,6 @@ module.exports = {
   preparePdfData,
   preparePartialMutationData,
   addAttachmentTask,
+  addAttachmentReport,
+  PrepareVoidReport
 };

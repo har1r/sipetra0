@@ -11,6 +11,16 @@ const ReportCounter =
   mongoose.models.ReportCounter ||
   mongoose.model("ReportCounter", reportCounterSchema);
 
+/**
+ * Sub-Schema: Lampiran File
+ */
+const reportAttachmentSchema = new mongoose.Schema({
+  fileName: { type: String, required: true },
+  driveLink: { type: String, trim: true, required: true },
+  uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+  uploadedAt: { type: Date, default: Date.now },
+});
+
 // Mendefinisikan skema utama untuk keseluruhan laporan
 const reportSchema = new mongoose.Schema(
   {
@@ -19,10 +29,9 @@ const reportSchema = new mongoose.Schema(
     year: { type: Number, required: true },
     tasks: [{ type: mongoose.Schema.Types.ObjectId, ref: "Task" }],
     generatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
-    driveLink: {
-      type: String,
-      trim: true,
-      default: null,
+    attachment: {
+      type: reportAttachmentSchema,
+      default: null
     },
     status: {
       type: String,

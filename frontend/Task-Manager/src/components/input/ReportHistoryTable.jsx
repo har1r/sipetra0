@@ -43,7 +43,7 @@ const ReportHistoryTable = forwardRef(({ onPrint }, ref) => {
       setLoading(true);
       try {
         const res = await axiosInstance.get(
-          API_PATHS.REPORTS.EXPORTED_REPORTS,
+          API_PATHS.REPORTS.GET_REPORTS,
           {
             params: {
               page: page,

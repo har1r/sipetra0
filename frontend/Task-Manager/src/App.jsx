@@ -8,8 +8,8 @@ import {
 import { Toaster } from "react-hot-toast";
 
 // Context & Logic
-import UserProvider from "./context/UserProvider";
-import UserContext from "./context/UserContexts";
+import UserProvider from "./contexts/UserProvider";
+import UserContext from "./contexts/UserContexts";
 import PrivateRoute from "./routes/PrivateRoute";
 import { ROLE, DEFAULT_ROUTE_BY_ROLE } from "./utils/data";
 

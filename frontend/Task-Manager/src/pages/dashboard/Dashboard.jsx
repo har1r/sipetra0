@@ -16,7 +16,7 @@ import CardSkeleton from "../../components/Skeletons/CardSkeleton";
 import TableSkeleton from "../../components/Skeletons/TableSkeleton";
 import Pagination from "../../components/ui/Pagination";
 
-import UserContext from "../../context/UserContexts";
+import UserContext from "../../contexts/UserContexts";
 import { UseUserAuth } from "../../hooks/UseUserAuth";
 import { API_PATHS } from "../../utils/apiPaths";
 import axiosInstance from "../../utils/axiosInstance";
@@ -28,9 +28,9 @@ const CustomBarChart = React.lazy(
 const CustomGraphChart = React.lazy(
   () => import("../../components/charts/CustomGraphChart"),
 );
-const TaskListTable = React.lazy(
-  () => import("../../components/tabels/TaskListTable"),
-);
+// const TaskListTable = React.lazy(
+//   () => import("../../components/tabels/TaskListTable"),
+// );
 
 const CHART_COLORS = ["#8D51FF", "#00B8DB", "#7BCE08", "#FFBB28", "#FF1F57"];
 
@@ -250,16 +250,7 @@ const Dashboard = () => {
 
               {overdueTasks.length > 0 ? (
                 <>
-                  <TaskListTable
-                    tableData={overdueTasks}
-                    page={page}
-                    limit={recordLimit}
-                    searchNopel={searchTerm}
-                    onSearchNopel={(val) => {
-                      setSearchTerm(val);
-                      fetchDashboardData(1);
-                    }}
-                  />
+                  
                   <Pagination
                     page={page}
                     totalPages={totalPages}
