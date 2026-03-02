@@ -7,7 +7,7 @@ import { RiLockPasswordFill } from "react-icons/ri";
 
 import AuthLayout from "../../components/layouts/AuthLayout";
 import Input from "../../components/input/Input";
-import UserContext from "../../context/UserContexts";
+import UserContext from "../../contexts/UserContexts";
 import axiosInstance from "../../utils/axiosInstance";
 import { validateEmail } from "../../utils/helper";
 import { API_PATHS } from "../../utils/apiPaths";

@@ -1,270 +1,101 @@
-import React, {
-  useContext,
-  useEffect,
-  useState,
-  useMemo,
-  useCallback,
-  Suspense,
-  useRef,
-} from "react";
-import { useNavigate } from "react-router-dom";
-import { LuArrowRight } from "react-icons/lu";
-
+// pages/Dashboard/Dashboard.jsx
+import React, { useContext, useMemo } from "react";
 import DashboardLayout from "../../components/layouts/DashboardLayout";
 import InfoCard from "../../components/cards/InfoCard";
+import DelayedTaskTable from "../../components/tables/DelayedTaskTable";
 import CardSkeleton from "../../components/Skeletons/CardSkeleton";
-import TableSkeleton from "../../components/Skeletons/TableSkeleton";
-import Pagination from "../../components/ui/Pagination";
 
 import UserContext from "../../contexts/UserContexts";
 import { UseUserAuth } from "../../hooks/UseUserAuth";
-import { API_PATHS } from "../../utils/apiPaths";
-import axiosInstance from "../../utils/axiosInstance";
+import { useDashboardData } from "../../hooks/useManageDashboard";
 import { formatDateId } from "../../utils/formatDateId";
-
-const CustomBarChart = React.lazy(
-  () => import("../../components/charts/CustomBarChart"),
-);
-const CustomGraphChart = React.lazy(
-  () => import("../../components/charts/CustomGraphChart"),
-);
-// const TaskListTable = React.lazy(
-//   () => import("../../components/tabels/TaskListTable"),
-// );
-
-const CHART_COLORS = ["#8D51FF", "#00B8DB", "#7BCE08", "#FFBB28", "#FF1F57"];
-
-const transformToChartData = (obj) =>
-  obj ? Object.entries(obj).map(([label, count]) => ({ label, count })) : [];
 
 const Dashboard = () => {
   UseUserAuth();
   const { user } = useContext(UserContext);
-  const navigate = useNavigate();
 
-  const [dashboardData, setDashboardData] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [page, setPage] = useState(1);
-  const [searchTerm, setSearchTerm] = useState("");
-  const currentYear = new Date().getFullYear();
-  const [yearFilter, setYearFilter] = useState(currentYear);
-  const abortControllerRef = useRef(null);
+  // Destructuring dari state dan actions sesuai struktur useDashboardData terbaru
+  const { state, actions } = useDashboardData();
+  const { cardStats, delayedAlerts, isLoading } = state;
+  console.log(delayedAlerts);
 
-  const recordLimit = 5;
   const todayLabel = useMemo(
     () => formatDateId(new Date(), { withWeekday: true }),
     [],
   );
 
-  const availableYears = useMemo(() => {
-    return Array.from({ length: 3 }, (_, i) => currentYear - i);
-  }, [currentYear]);
-
-  const {
-    stats = {},
-    overdueTasks = [],
-    overdueTotal = 0,
-    weeklyStats = [],
-  } = dashboardData || {};
-
-  const totalPages = useMemo(
-    () => Math.ceil(overdueTotal / recordLimit) || 1,
-    [overdueTotal, recordLimit],
-  );
-
-  const fetchDashboardData = useCallback(
-    async (pageNumber = 1) => {
-      abortControllerRef.current?.abort();
-      const controller = new AbortController();
-      abortControllerRef.current = controller;
-
-      try {
-        setIsLoading(true);
-        const { data } = await axiosInstance.get(
-          API_PATHS.TASK.GET_DASHBOARD_DATA,
-          {
-            params: {
-              page: pageNumber,
-              limit: recordLimit,
-              nopel: searchTerm || undefined,
-              year: yearFilter || undefined,
-            },
-            signal: controller.signal,
-          },
-        );
-
-        setDashboardData(data ?? {});
-        setPage(pageNumber);
-      } catch (error) {
-        if (
-          !["CanceledError", "AbortError", "ERR_CANCELED"].includes(
-            error?.name || error?.code,
-          )
-        ) {
-          console.error("Dashboard fetch error:", error);
-        }
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [recordLimit, searchTerm, yearFilter],
-  );
-
-  useEffect(() => {
-    fetchDashboardData(1);
-    return () => abortControllerRef.current?.abort();
-  }, [fetchDashboardData]);
-
   return (
     <DashboardLayout activeMenu="Dashboard">
-      <div className="min-h-screen">
-        {/* Header */}
+      <div className="min-h-screen pb-10">
+        {/* Header Section */}
         <header className="mb-8 bg-white/70 backdrop-blur-md p-6 rounded-3xl shadow-md border border-emerald-200/50">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
             <div>
               <h1 className="text-3xl font-extrabold text-emerald-800">
-                Selamat datang, {user?.name}
+                Halo, {user?.name}
               </h1>
-              <p className="text-sm text-emerald-600">{todayLabel}</p>
+              <p className="text-sm text-emerald-600">
+                {todayLabel} • Ringkasan Statistik Laporan
+              </p>
             </div>
-
-            <div className="flex items-center gap-2">
-              <label className="text-sm font-medium text-emerald-700">
-                Tahun:
-              </label>
-              <select
-                value={yearFilter}
-                onChange={(e) => {
-                  setYearFilter(e.target.value);
-                  fetchDashboardData(1);
-                }}
-                className="rounded-xl border border-emerald-300 bg-white/80 px-3 py-2 text-sm text-emerald-800 shadow-sm focus:ring-2 focus:ring-emerald-500 transition"
-              >
-                {availableYears.map((year) => (
-                  <option key={year} value={year}>
-                    {year}
-                  </option>
-                ))}
-                <option value="">Semua Tahun</option>
-              </select>
-            </div>
+            {/* Tombol Refresh Opsional */}
+            <button
+              onClick={actions.refresh}
+              className="text-xs bg-emerald-100 text-emerald-700 px-4 py-2 rounded-xl hover:bg-emerald-200 transition font-medium"
+            >
+              Refresh Data
+            </button>
           </div>
-
-          {/* Summary Cards */}
-          <section className="mt-6 grid grid-cols-2 md:grid-cols-4 gap-5">
-            <InfoCard
-              label="Total Permohonan"
-              value={stats.totalTasks ?? 0}
-              color="primary"
-            />
-            <InfoCard
-              label="Dikirim"
-              value={stats.totalApproved ?? 0}
-              color="green"
-            />
-            <InfoCard
-              label="Ditolak"
-              value={stats.totalRejected ?? 0}
-              color="red"
-            />
-            <InfoCard
-              label="Diproses"
-              value={stats.totalPending ?? 0}
-              color="yellow"
-            />
-          </section>
         </header>
 
-        {/* Charts */}
-        <main className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Suspense fallback={<CardSkeleton />}>
-            <section className="bg-white/70 backdrop-blur-md rounded-2xl shadow-lg p-6 border border-emerald-200 hover:shadow-xl transition">
-              <h2 className="text-xl font-semibold text-emerald-800 mb-3">
-                Permohonan Per Jenis
-              </h2>
-              {stats.tasksPerTitle ? (
-                <CustomBarChart
-                  data={transformToChartData(stats.tasksPerTitle)}
-                  colors={CHART_COLORS}
-                />
-              ) : (
-                <div className="py-10 text-center text-emerald-600 text-sm">
-                  Belum ada data.
+        {/* Content Section */}
+        <main className="space-y-8">
+          {/* Stats Section: Loading atau Grid Data */}
+          {isLoading ? (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {[1, 2, 3, 4].map((i) => (
+                <CardSkeleton key={i} />
+              ))}
+            </div>
+          ) : cardStats.length > 0 ? (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {cardStats.map((item, idx) => (
+                <InfoCard key={idx} item={item} />
+              ))}
+            </div>
+          ) : (
+            /*  Empty State: Jika benar-benar tidak ada data */
+            <div className="text-center py-20 bg-white/50 backdrop-blur-sm rounded-[2.5rem] border border-dashed border-emerald-300">
+              <div className="flex flex-col items-center gap-2">
+                <div className="p-4 bg-emerald-50 rounded-full text-emerald-400">
+                  {/* Anda bisa tambahkan icon search/folder kosong di sini */}
+                  <svg
+                    className="w-8 h-8"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"
+                    />
+                  </svg>
                 </div>
-              )}
-            </section>
-          </Suspense>
-
-          <Suspense fallback={<CardSkeleton />}>
-            <section className="bg-white/70 backdrop-blur-md rounded-2xl shadow-lg p-6 border border-emerald-200 hover:shadow-xl transition">
-              <h2 className="text-xl font-semibold text-emerald-800 mb-3">
-                Permohonan Per Kecamatan
-              </h2>
-              {stats.tasksPerSubdistrict ? (
-                <CustomBarChart
-                  data={transformToChartData(stats.tasksPerSubdistrict)}
-                  colors={CHART_COLORS}
-                />
-              ) : (
-                <div className="py-10 text-center text-emerald-600 text-sm">
-                  Belum ada data.
-                </div>
-              )}
-            </section>
-          </Suspense>
-
-          <Suspense fallback={<CardSkeleton />}>
-            <section className="md:col-span-2 bg-white/70 backdrop-blur-md rounded-2xl shadow-lg p-6 border border-emerald-200 hover:shadow-xl transition">
-              <h2 className="text-xl font-semibold text-emerald-800 mb-3">
-                Tren Permohonan (12 Minggu Terakhir)
-              </h2>
-              {weeklyStats.length > 0 ? (
-                <CustomGraphChart data={weeklyStats} showLegend />
-              ) : (
-                <div className="py-10 text-center text-emerald-600 text-sm">
-                  Belum ada data.
-                </div>
-              )}
-            </section>
-          </Suspense>
-
-          <Suspense fallback={<TableSkeleton />}>
-            <section className="md:col-span-2 relative bg-white/70 backdrop-blur-md rounded-2xl shadow-lg p-6 border border-emerald-200 hover:shadow-xl transition">
-              {isLoading && (
-                <div className="absolute inset-0 flex items-center justify-center bg-white/50 backdrop-blur-sm rounded-2xl">
-                  <div className="h-6 w-6 animate-spin rounded-full border-4 border-emerald-500 border-t-transparent"></div>
-                </div>
-              )}
-
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold text-emerald-800">
-                  Permohonan Jatuh Tempo
-                </h2>
-                <button
-                  onClick={() => navigate("/admin/tasks")}
-                  className="flex items-center gap-1 text-emerald-600 hover:text-emerald-700 text-sm font-medium"
-                >
-                  Lihat Semua <LuArrowRight />
-                </button>
+                <p className="text-emerald-600 font-medium">
+                  Belum ada data statistik untuk ditampilkan.
+                </p>
               </div>
+            </div>
+          )}
 
-              {overdueTasks.length > 0 ? (
-                <>
-                  
-                  <Pagination
-                    page={page}
-                    totalPages={totalPages}
-                    disabled={isLoading}
-                    onPageChange={(newPage) => fetchDashboardData(newPage)}
-                  />
-                </>
-              ) : (
-                <div className="py-10 text-center text-emerald-600 text-sm">
-                  Tidak ada data jatuh tempo.
-                </div>
-              )}
+          {/* Alert Section: Muncul paling atas jika ada data tertunda */}
+          {!isLoading && delayedAlerts.count > 0 && (
+            <section className="animate-in fade-in slide-in-from-top-4 duration-700">
+              <DelayedTaskTable tasks={delayedAlerts.tasks} />
             </section>
-          </Suspense>
+          )}
         </main>
       </div>
     </DashboardLayout>

@@ -75,3 +75,21 @@
     scrollbar-width: none;
   }
 }
+
+/* index.css atau globals.css */
+@keyframes vertical-scroll {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(-50%);
+  } /* Narik ke atas setengah total tinggi (karena data diduplikasi) */
+}
+
+.animate-vertical-scroll {
+  animation: vertical-scroll 30s linear infinite; /* Atur detik untuk kecepatan */
+}
+
+.animate-vertical-scroll:hover {
+  animation-play-state: paused; /* Berhenti saat mouse hover agar user bisa baca */
+}

@@ -12,7 +12,7 @@ import AuthLayout from "../../components/layouts/AuthLayout";
 import Input from "../../components/input/Input";
 import axiosInstance from "../../utils/axiosInstance";
 import { validateEmail } from "../../utils/helper";
-import UserContext from "../../context/UserContexts";
+import UserContext from "../../contexts/UserContexts";
 import { API_PATHS } from "../../utils/apiPaths";
 
 const stageToRoleMap = {

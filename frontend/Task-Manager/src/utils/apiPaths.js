@@ -1,5 +1,5 @@
 // Alamat URL Utama
-export const BASE_URL = "https://c7qrlm2d-8000.asse.devtunnels.ms/";
+export const BASE_URL = "http://localhost:8000";
 
 /**
  * === 🛠️ API PATHS REGISTRY ===
@@ -47,5 +47,10 @@ export const API_PATHS = {
       `/api/reports/add-attachment-to-task/${taskId}`,
     ADD_ATTACHMENT_TO_REPORT: (reportId) =>
       `/api/reports/add-attachment-to-report/${reportId}`,
+  },
+
+  DASHBOARD: {
+    GET_CARD_TASKS: "/api/dashboard/get-card-task",
+    GET_DELAYED_TASKS: "/api/dashboard/get-delayed-task",
   },
 };
