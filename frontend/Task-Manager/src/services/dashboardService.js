@@ -26,4 +26,26 @@ export const dashboardService = {
       count: data.count ?? 0,
     };
   },
+
+  fetchSubdistrictChart: async (signal) => {
+    const { data } = await axiosInstance.get(
+      API_PATHS.DASHBOARD.GET_SUBDISTRICT_CHART, 
+      {
+        signal,
+      }
+    );
+
+    return data.data ?? { serviceTypes: [], chartData: [] };
+  },
+
+  fetchVillageChart: async (signal) => {
+    const { data } = await axiosInstance.get(
+      API_PATHS.DASHBOARD.GET_VILLAGE_CHART, 
+      {
+        signal,
+      }
+    );
+
+    return data.data ?? { serviceTypes: [], chartData: [] };
+  },
 };

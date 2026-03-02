@@ -1,12 +1,16 @@
+// hooks/useDashboardData.js
 import { useState, useEffect, useCallback, useRef } from "react";
 import toast from "react-hot-toast";
 import { dashboardService } from "../services/dashboardService";
 
-export const useDashboardData = () => {
+export const useManageDashboard = () => {
   const abortControllerRef = useRef(null);
 
   const [cardStats, setCardStats] = useState([]);
-  const [delayedAlerts, setDelayedAlerts] = useState({ tasks: [], count: 0 }); // State baru untuk data 2 minggu
+  const [delayedAlerts, setDelayedAlerts] = useState({ tasks: [], count: 0 });
+  // State baru untuk data grafik Bar Subdistrict
+  const [subdistrictData, setSubdistrictData] = useState({ serviceTypes: [], chartData: [] });
+  const [villageData, setVillageData] = useState({ serviceTypes: [], chartData: [] });
   const [isLoading, setIsLoading] = useState(true);
 
   const [filterDraft, setFilterDraft] = useState({
@@ -21,14 +25,18 @@ export const useDashboardData = () => {
 
     setIsLoading(true);
     try {
-      // Menjalankan kedua fetch secara bersamaan
-      const [cards, delayed] = await Promise.all([
+      // Menjalankan ketiga fetch secara bersamaan untuk performa maksimal
+      const [cards, delayed, subdistrictChart, villageChart] = await Promise.all([
         dashboardService.fetchDashboardCards(controller.signal),
         dashboardService.fetchDelayedTasks(controller.signal),
+        dashboardService.fetchSubdistrictChart(controller.signal), // Fetch grafik baru
+        dashboardService.fetchVillageChart(controller.signal), // Fetch grafik baru
       ]);
 
       setCardStats(cards);
       setDelayedAlerts(delayed);
+      setSubdistrictData(subdistrictChart); // Update state grafik
+      setVillageData(villageChart);
     } catch (err) {
       if (
         !["CanceledError", "AbortError", "ERR_CANCELED"].includes(
@@ -70,6 +78,8 @@ export const useDashboardData = () => {
     state: {
       cardStats,
       delayedAlerts,
+      subdistrictData, // Return state grafik ke komponen UI
+      villageData,
       isLoading,
       filterDraft,
       appliedFilters,

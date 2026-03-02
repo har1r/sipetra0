@@ -1,10 +1,9 @@
 import React, { useState, useEffect } from "react";
-import { HiOutlineExclamation, HiX } from "react-icons/hi";
+import { HiOutlineExclamation } from "react-icons/hi";
 
 const VoidConfirmationModal = ({ isOpen, batchId, onClose, onConfirm }) => {
   const [inputValue, setInputValue] = useState("");
   
-  // Reset input saat modal dibuka/tutup
   useEffect(() => { if (!isOpen) setInputValue(""); }, [isOpen]);
 
   if (!isOpen) return null;
