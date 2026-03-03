@@ -3,7 +3,7 @@ const Task = require("../models/Task");
 
 const STAGE_ORDER = [
   "diinput",
-  "ditata",
+  // "ditata",
   "diteliti",
   "diarsipkan",
   "dikirim",
@@ -13,7 +13,7 @@ const STAGE_ORDER = [
 
 const ROLE_STAGE_MAP = {
   diinput: "penginput",
-  ditata: "penata",
+  // ditata: "penata",
   diteliti: "peneliti",
   diarsipkan: "pengarsip",
   dikirim: "pengirim",
@@ -65,8 +65,8 @@ const createTask = async (req, res) => {
     // Jika pengaktifan dan nopel kosong, buatkan otomatis
     if (isPengaktifan && (!mainData.nopel || mainData.nopel.trim() === "")) {
       const datePart = new Date().toISOString().split("T")[0].replace(/-/g, "");
-      const randomPart = Math.random().toString(36).substring(7).toUpperCase();
-      mainData.nopel = `ACT-${datePart}-${randomPart}`;
+      // const randomPart = Math.random().toString(36).substring(7).toUpperCase();
+      mainData.nopel = `ATV${datePart}`;
     }
 
     // 4. Validasi Field Main Data (Sekarang nopel sudah terisi jika pengaktifan)
@@ -141,7 +141,7 @@ const createTask = async (req, res) => {
       };
     });
 
-    const currentStage = isPengaktifan ? "diarsipkan" : "ditata";
+    const currentStage = isPengaktifan ? "diarsipkan" : "diteliti";
 
     // 8. Simpan Task
     const newTask = new Task({
@@ -377,8 +377,8 @@ const updateTask = async (req, res) => {
 
     if (isPengaktifan && (!mainData.nopel || mainData.nopel.trim() === "")) {
       const datePart = new Date().toISOString().split("T")[0].replace(/-/g, "");
-      const randomPart = Math.random().toString(36).substring(7).toUpperCase();
-      mainData.nopel = `ACT-${datePart}-${randomPart}`;
+      // const randomPart = Math.random().toString(36).substring(7).toUpperCase();
+      mainData.nopel = `ACT${datePart}`;
     }
 
     // 4. Validasi Strict (Menghindari 0 dianggap kosong)
@@ -1163,7 +1163,7 @@ const getAllUserPerformance = async (req, res) => {
     // Hanya 5 stage yang valid
     const stageOrderInPerformance = [
       "diinput",
-      "ditata",
+      // "ditata",
       "diteliti",
       "diarsipkan",
       "dikirim",

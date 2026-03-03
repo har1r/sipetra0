@@ -38,7 +38,7 @@ const approvalSchema = new mongoose.Schema(
       // Konsisten dengan urutan proses
       enum: [
         "diinput",
-        "ditata",
+        // "ditata",
         "diteliti",
         "diarsipkan",
         "dikirim",
@@ -95,7 +95,7 @@ const taskSchema = new mongoose.Schema(
       type: String,
       enum: [
         "diinput",
-        "ditata",
+        // "ditata",
         "diteliti",
         "diarsipkan",
         "dikirim",

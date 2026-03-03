@@ -17,11 +17,11 @@ import { API_PATHS } from "../../utils/apiPaths";
 
 const stageToRoleMap = {
   Diinput: "penginput",
-  Ditata: "penata",
+  // Ditata: "penata",
   Diteliti: "peneliti",
-  Arsip: "pengarsip",
+  Diarsipkan: "pengarsip",
   Dikirim: "pengirim",
-  Selesai: "pengecek",
+  Diperiksa: "pemeriksa",
 };
 
 const SignUp = () => {
