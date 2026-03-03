@@ -1,5 +1,5 @@
 // Alamat URL Utama
-export const BASE_URL = "https://c7qrlm2d-8000.asse.devtunnels.ms/";
+export const BASE_URL = "https://f998hms6-8000.asse.devtunnels.ms/";
 
 /**
  * === 🛠️ API PATHS REGISTRY ===
@@ -53,6 +53,6 @@ export const API_PATHS = {
     GET_CARD_TASKS: "/api/dashboard/get-card-task",
     GET_DELAYED_TASKS: "/api/dashboard/get-delayed-task",
     GET_SUBDISTRICT_CHART: "/api/dashboard/get-subdistrict-chart",
-    GET_VILLAGE_CHART: "/api/dashboard/get-village-chart"
+    GET_VILLAGE_CHART: "/api/dashboard/get-village-chart",
   },
 };

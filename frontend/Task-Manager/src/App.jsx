@@ -15,8 +15,8 @@ import { ROLE, DEFAULT_ROUTE_BY_ROLE } from "./utils/data";
 
 // Components
 import LoadingSpinner from "./components/ui/LoadingSpinner";
-import Login from "./pages/auth/Login";
-import SignUp from "./pages/auth/SignUp";
+import Login from "./pages/authentication/Login";
+import SignUp from "./pages/authentication/SignUp";
 import ManageTask from "./pages/task/ManageTask"; // Import statis untuk performa menu utama
 
 // === Lazy-loaded Pages ===

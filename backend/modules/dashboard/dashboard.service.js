@@ -27,7 +27,7 @@ const getTaskSummaryCards = async () => {
 const getTasksPendingMoreThanTwoWeeks = async () => {
   //   const twoWeeksAgo = new Date();
   //   twoWeeksAgo.setDate(twoWeeksAgo.getDate() - 14);
-  const twoWeeksAgo = new Date(2026, 2, 2, 12, 0);
+  const twoWeeksAgo = new Date(2026, 2, 3, 15, 0);
 
   const tasks = await repository.findDelayedTasks(twoWeeksAgo);
 
@@ -49,18 +49,18 @@ const getTasksPendingMoreThanTwoWeeks = async () => {
 const subdistrictStatsForBarChart = async () => {
   // 1. Ambil data mentah dari repository
   const rawData = await repository.findSubdistrictForChart();
-  
+
   // Debugging: Lihat struktur data pertama untuk memastikan nama field
   // console.log("Raw Data Sample:", rawData[0]);
 
   // 2. Ambil semua jenis layanan unik untuk kolom/legend
-  const serviceTypes = [...new Set(rawData.map(item => item.title))];
-  
+  const serviceTypes = [...new Set(rawData.map((item) => item.title))];
+
   // 3. Proses pengelompokan
   const groupedData = rawData.reduce((acc, curr) => {
-    // Pastikan kita mengambil field yang benar. 
+    // Pastikan kita mengambil field yang benar.
     // Jika di project Anda pakai 'subdistrict', gunakan itu.
-    const key = curr.subdistrict || "Tanpa Nama Kecamatan"; 
+    const key = curr.subdistrict || "Tanpa Nama Kecamatan";
     const serviceTitle = curr.title;
     const serviceCount = curr.count || 0;
 
@@ -68,7 +68,7 @@ const subdistrictStatsForBarChart = async () => {
     if (!acc[key]) {
       acc[key] = { subdistrict: key };
       // Set semua tipe layanan ke 0 agar tidak undefined di chart
-      serviceTypes.forEach(type => {
+      serviceTypes.forEach((type) => {
         acc[key][type] = 0;
       });
     }
@@ -83,17 +83,17 @@ const subdistrictStatsForBarChart = async () => {
 
   return {
     serviceTypes,
-    chartData: Object.values(groupedData)
+    chartData: Object.values(groupedData),
   };
 };
 
 // services/taskService.js
 const villageStatsForBarChart = async () => {
   const rawData = await repository.findVillageForChart();
-  
+
   // 1. Ambil list layanan unik untuk Legend
-  const serviceTypes = [...new Set(rawData.map(item => item.title))];
-  
+  const serviceTypes = [...new Set(rawData.map((item) => item.title))];
+
   // 2. Transformasi data agar dikelompokkan per Kelurahan
   const groupedData = rawData.reduce((acc, curr) => {
     // Gunakan pengecekan aman (optional chaining atau fallback)
@@ -103,9 +103,9 @@ const villageStatsForBarChart = async () => {
 
     if (!acc[villageName]) {
       acc[villageName] = { village: villageName };
-      
+
       // Inisialisasi semua layanan dengan 0
-      serviceTypes.forEach(type => {
+      serviceTypes.forEach((type) => {
         acc[villageName][type] = 0;
       });
     }
@@ -120,7 +120,7 @@ const villageStatsForBarChart = async () => {
 
   return {
     serviceTypes,
-    chartData: Object.values(groupedData)
+    chartData: Object.values(groupedData),
   };
 };
 
@@ -128,5 +128,5 @@ module.exports = {
   getTaskSummaryCards,
   getTasksPendingMoreThanTwoWeeks,
   subdistrictStatsForBarChart,
-  villageStatsForBarChart
+  villageStatsForBarChart,
 };

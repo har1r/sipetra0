@@ -3,8 +3,18 @@ const Report = require("../../models/Report");
 
 // Fungsi untuk getVerifiedTasks
 const findVerifiedTasks = async ({ filters, sortDirection, skip, limit }) => {
-  const [totalData, tasks] = await Promise.all([
-    Task.countDocuments(filters),
+  const [totalResult, tasks] = await Promise.all([
+    Task.aggregate([
+      { $match: filters }, // Terapkan filter yang sama
+      {
+        $group: {
+          _id: null,
+          totalBerkas: {
+            $sum: { $size: { $ifNull: ["$additionalData", []] } },
+          },
+        },
+      },
+    ]),
     Task.find(filters)
       .sort({ updatedAt: sortDirection })
       .skip(skip)
@@ -16,6 +26,8 @@ const findVerifiedTasks = async ({ filters, sortDirection, skip, limit }) => {
       .select("title mainData additionalData attachment updatedAt reportId")
       .lean(),
   ]);
+
+  const totalData = totalResult.length > 0 ? totalResult[0].totalBerkas : 0;
 
   return { totalData, tasks };
 };
@@ -76,7 +88,7 @@ const updateTasksReportReference = async (taskIds, reportId) => {
 const getReportForPdf = async (reportId) => {
   return await Report.findById(reportId)
     .populate({
-      path: "tasks"
+      path: "tasks",
     })
     .lean();
 };
@@ -94,14 +106,14 @@ const findTaskById = async (taskId) => {
 const setAttachmentTask = async (taskId, attachmentData) => {
   return await Task.findByIdAndUpdate(
     taskId,
-    { 
-      $set: { attachment: attachmentData } 
+    {
+      $set: { attachment: attachmentData },
     },
-    { 
-      new: true, 
-      runValidators: true, 
-      select: "attachment" 
-    }
+    {
+      new: true,
+      runValidators: true,
+      select: "attachment",
+    },
   ).lean();
 };
 // Funsi untuk addAttachmentToTasks
@@ -111,13 +123,13 @@ const setAttachmentReport = async (reportId, attachmentData) => {
   return await Report.findByIdAndUpdate(
     reportId,
     {
-      $set: {attachment: attachmentData}
+      $set: { attachment: attachmentData },
     },
     {
-      new: true, 
-      runValidators: true, 
-      select: "attachment" 
-    }
+      new: true,
+      runValidators: true,
+      select: "attachment",
+    },
   ).lean();
 };
 // Fungsi unutk addAttachmentToReport
@@ -130,14 +142,14 @@ const updateReportStatus = async (reportId, status) => {
   return await Report.findByIdAndUpdate(
     reportId,
     { status: status },
-    { new: true }
+    { new: true },
   );
 };
 
 const detachTasksFromReport = async (reportId) => {
   return await Task.updateMany(
     { reportId: reportId },
-    { $set: { reportId: null } }
+    { $set: { reportId: null } },
   );
 };
 
@@ -154,5 +166,5 @@ module.exports = {
   setAttachmentReport,
   findReportById,
   updateReportStatus,
-  detachTasksFromReport
+  detachTasksFromReport,
 };

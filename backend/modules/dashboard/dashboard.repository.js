@@ -9,7 +9,7 @@ const findStatsTitleCard = async () => {
           status: "$overallStatus",
           stage: "$currentStage",
         },
-        count: { $sum: 1 },
+        count: { $sum: { $size: { $ifNull: ["$additionalData", []] } } },
       },
     },
     {
@@ -50,22 +50,24 @@ const findSubdistrictForChart = async () => {
       $group: {
         _id: {
           subdistrict: "$mainData.subdistrict",
-          title: "$title"
+          title: "$title",
         },
-        count: { $sum: 1 }
-      }
+        count: {
+          $sum: { $size: { $ifNull: ["$additionalData", []] } },
+        },
+      },
     },
     {
       $project: {
         _id: 0,
         subdistrict: "$_id.subdistrict",
         title: "$_id.title",
-        count: 1
-      }
+        count: 1,
+      },
     },
     {
-      $sort: { subdistrict: 1, title: 1 }
-    }
+      $sort: { subdistrict: 1, title: 1 },
+    },
   ]);
 };
 
@@ -76,22 +78,24 @@ const findVillageForChart = async () => {
       $group: {
         _id: {
           village: "$mainData.village",
-          title: "$title"
+          title: "$title",
         },
-        count: { $sum: 1 }
-      }
+        count: {
+          $sum: { $size: { $ifNull: ["$additionalData", []] } },
+        },
+      },
     },
     {
       $project: {
         _id: 0,
         village: "$_id.village",
         title: "$_id.title",
-        count: 1
-      }
+        count: 1,
+      },
     },
     {
-      $sort: { village: 1, title: 1 }
-    }
+      $sort: { village: 1, title: 1 },
+    },
   ]);
 };
 module.exports = {

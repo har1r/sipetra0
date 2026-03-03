@@ -5,7 +5,7 @@ const service = require("../report/report.service");
 const getVerifiedTasks = async (req, res, next) => {
   try {
     const result = await service.getVerifiedTasksService(req.query);
-    
+
     res.status(200).json({ result });
   } catch (error) {
     console.log("FULL ERROR OBJECT:", error); // Lihat bagian 'message' atau 'reason'
@@ -63,9 +63,9 @@ const generateReports = async (req, res, next) => {
     const user = req.user;
 
     if (!user) return res.status(401).json({ message: "Silahkan login." });
-    if (!["admin", "peneliti"].includes(user.role)) {
-      return res.status(403).json({ message: "Izin akses ditolak." });
-    }
+    // if (!["admin", "peneliti"].includes(user.role)) {
+    //   return res.status(403).json({ message: "Izin akses ditolak." });
+    // }
 
     const result = await service.preparePdfData(reportId);
     console.log(result);
@@ -319,9 +319,9 @@ const generatePartialMutations = async (req, res, next) => {
     const user = req.user;
 
     if (!user) return res.status(401).json({ message: "Silahkan login." });
-    if (!["admin", "peneliti"].includes(user.role)) {
-      return res.status(403).json({ message: "Izin akses ditolak." });
-    }
+    // if (!["admin", "peneliti"].includes(user.role)) {
+    //   return res.status(403).json({ message: "Izin akses ditolak." });
+    // }
 
     const result = await service.preparePartialMutationData(taskId);
     console.log(result);
@@ -450,12 +450,10 @@ const generatePartialMutations = async (req, res, next) => {
       (label, i) => {
         const fX = startX + i * footerWidth;
         doc.rect(fX, currentY, footerWidth, 60).stroke();
-        doc
-          .fontSize(8)
-          .text(label, fX, currentY + 5, {
-            width: footerWidth,
-            align: "center",
-          });
+        doc.fontSize(8).text(label, fX, currentY + 5, {
+          width: footerWidth,
+          align: "center",
+        });
       },
     );
 
@@ -545,12 +543,12 @@ const voidReport = async (req, res) => {
     const result = await service.PrepareVoidReport(reportId);
 
     return res.status(200).json({
-      message: "Surat pengantar berhasil dibatalkan (VOID) dan permohonan telah dilepaskan.",
+      message:
+        "Surat pengantar berhasil dibatalkan (VOID) dan permohonan telah dilepaskan.",
       batchId: result.reportId,
     });
-
   } catch (error) {
-console.log("FULL ERROR OBJECT:", error);
+    console.log("FULL ERROR OBJECT:", error);
     return res.status(500).json({
       message: error.message,
       stack: error.stack,
@@ -566,5 +564,5 @@ module.exports = {
   generatePartialMutations,
   addAttachmentToTasks,
   addAttachmentToReports,
-  voidReport
+  voidReport,
 };
