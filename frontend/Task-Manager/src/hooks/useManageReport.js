@@ -279,6 +279,7 @@ export const useManageReport = () => {
     submitTaskAttachment: async (e) => {
       if (e) e.preventDefault();
       const { taskId, fileName, driveLink } = taskAttachmentForm;
+      console.log({ fileName, driveLink });
       const tid = toast.loading("Menyimpan lampiran...");
 
       try {
@@ -304,6 +305,28 @@ export const useManageReport = () => {
         toast.error(err.response?.data?.message || "Gagal simpan", { id: tid });
       }
     },
+
+    deleteTaskAttachment: async (taskId, attachmentId) => {
+      const tid = toast.loading("Menghapus lampiran...");
+      try {
+        const res = await reportService.deleteAttachmentFromTask(
+          taskId,
+          attachmentId,
+        );
+        // Update state lokal berdasarkan response controller (data: remainingAttachments)
+        setTasks((prev) =>
+          prev.map((t) =>
+            t._id === taskId ? { ...t, attachment: res.data.data } : t,
+          ),
+        );
+        toast.success("Lampiran berhasil dihapus", { id: tid });
+      } catch (err) {
+        toast.error(err.response?.data?.message || "Gagal menghapus", {
+          id: tid,
+        });
+      }
+    },
+
     setTaskPage: (newPage) => {
       setTaskPagination((prev) => ({ ...prev, currentPage: newPage }));
     },
@@ -393,26 +416,27 @@ export const useManageReport = () => {
         batchId: report.batchId,
       });
     },
-    closeVoidModal: () => setVoidConfirm({ isOpen: false, reportId: null, batchId: "" }),
+    closeVoidModal: () =>
+      setVoidConfirm({ isOpen: false, reportId: null, batchId: "" }),
 
     confirmVoidReport: async () => {
       const { reportId } = voidConfirm;
       const tid = toast.loading("Membatalkan surat pengantar...");
-      
+
       try {
         await reportService.voidReport(reportId);
         toast.success("surat pengantar berhasil dibatalkan", { id: tid });
 
         fetchReportDatas();
         fetchVerifiedTaskDatas();
-        
+
         actions.closeVoidModal();
         return true;
       } catch (err) {
         toast.error(err.response?.data?.message || "Gagal", { id: tid });
         return false;
       }
-  },
+    },
     // Kode untuk reports
   };
 
@@ -436,7 +460,7 @@ export const useManageReport = () => {
       reportFilterConfigs,
       filterReportDraft,
       reportAttachmentForm,
-      voidConfirm
+      voidConfirm,
 
       // Kode untuk reports
     },

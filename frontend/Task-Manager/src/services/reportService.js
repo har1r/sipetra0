@@ -41,6 +41,12 @@ export const reportService = {
     );
   },
 
+  deleteAttachmentFromTask: async (taskId, attachmentId) => {
+    return await axiosInstance.post(
+      API_PATHS.REPORTS.DELETE_ATTACHMENT_TO_TASK(taskId, attachmentId),
+    );
+  },
+
   generateReport: async (reportId) => {
     return await axiosInstance.post(
       API_PATHS.REPORTS.GENERATE_REPORT(reportId),
@@ -57,8 +63,6 @@ export const reportService = {
   },
 
   voidReport: async (reportId) => {
-    return await axiosInstance.patch(
-      API_PATHS.REPORTS.VOID_REPORT(reportId),
-    );
+    return await axiosInstance.patch(API_PATHS.REPORTS.VOID_REPORT(reportId));
   },
 };

@@ -31,7 +31,7 @@ const reportSchema = new mongoose.Schema(
     generatedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     attachment: {
       type: reportAttachmentSchema,
-      default: null
+      default: null,
     },
     status: {
       type: String,

@@ -109,8 +109,7 @@ const TaskTableRow = ({ task, isSelected, onSelect, onPrint, onAddLink }) => {
             <HiOutlineLink size={14} />
           </button>
 
-          {/* Tombol Buka Link Drive (Hanya muncul jika ada link) */}
-          {hasAttachment && (
+          {/* {hasAttachment && (
             <a
               href={task.attachment.driveLink}
               target="_blank"
@@ -120,7 +119,7 @@ const TaskTableRow = ({ task, isSelected, onSelect, onPrint, onAddLink }) => {
             >
               <HiOutlineExternalLink size={14} />
             </a>
-          )}
+          )} */}
         </div>
       </td>
     </tr>

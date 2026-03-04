@@ -45,6 +45,8 @@ export const API_PATHS = {
 
     ADD_ATTACHMENT_TO_TASK: (taskId) =>
       `/api/reports/add-attachment-to-task/${taskId}`,
+    DELETE_ATTACHMENT_TO_TASK: (taskId, attachmentId) =>
+      `/api/reports/delete-attachment-to-task/${taskId}/attachments/${attachmentId}`,
     ADD_ATTACHMENT_TO_REPORT: (reportId) =>
       `/api/reports/add-attachment-to-report/${reportId}`,
   },

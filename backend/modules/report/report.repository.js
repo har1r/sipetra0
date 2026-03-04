@@ -103,20 +103,22 @@ const findTaskById = async (taskId) => {
 // Fungsi untuk generatePartialMutations
 
 // Funsi untuk addAttachmentToTasks
-const setAttachmentTask = async (taskId, attachmentData) => {
+const setAttachmentTask = async (taskId, attachmentDataArray) => {
   return await Task.findByIdAndUpdate(
     taskId,
-    {
-      $set: { attachment: attachmentData },
-    },
-    {
-      new: true,
-      runValidators: true,
-      select: "attachment",
-    },
+    { $push: { attachment: { $each: attachmentDataArray } } },
+    { new: true, runValidators: true, select: "attachment" },
   ).lean();
 };
 // Funsi untuk addAttachmentToTasks
+
+const removeAttachmentFromTask = async (taskId, attachmentId) => {
+  return await Task.findByIdAndUpdate(
+    taskId,
+    { $pull: { attachment: { _id: attachmentId } } }, // Menghapus objek dengan _id tertentu
+    { new: true, select: "attachment" },
+  ).lean();
+};
 
 // Fungsi unutk addAttachmentToReport
 const setAttachmentReport = async (reportId, attachmentData) => {
@@ -163,6 +165,7 @@ module.exports = {
   getReportForPdf,
   findTaskById,
   setAttachmentTask,
+  removeAttachmentFromTask,
   setAttachmentReport,
   findReportById,
   updateReportStatus,

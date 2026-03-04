@@ -286,14 +286,19 @@ const addAttachmentTask = async (taskId, body, userId) => {
     );
   }
 
-  const attachmentData = {
-    fileName: fileName.trim(),
-    driveLink: driveLink.trim(),
-    uploadedBy: userId,
-    uploadedAt: new Date(),
-  };
+  const attachmentData = [
+    {
+      fileName: fileName.trim(),
+      driveLink: driveLink.trim(),
+      uploadedBy: userId,
+      uploadedAt: new Date(),
+    },
+  ];
 
-  const updatedTask = await repository.setAttachmentTask(taskId, attachmentData);
+  const updatedTask = await repository.setAttachmentTask(
+    taskId,
+    attachmentData,
+  );
 
   if (!updatedTask) {
     throw new Error("Permohonan tidak ditemukan");
@@ -302,6 +307,23 @@ const addAttachmentTask = async (taskId, body, userId) => {
   return updatedTask.attachment;
 };
 // Funsi untuk addAttachmentToTasks
+
+const removeAttachmentTask = async (taskId, attachmentId) => {
+  if (!taskId || !attachmentId) {
+    throw new Error("ID Task dan ID Attachment wajib disertakan");
+  }
+
+  const updatedTask = await repository.removeAttachmentFromTask(
+    taskId,
+    attachmentId,
+  );
+
+  if (!updatedTask) {
+    throw new Error("Task tidak ditemukan atau gagal diperbarui");
+  }
+
+  return updatedTask.attachment;
+};
 
 // Fungsi unutk addAttachmentToReport
 const addAttachmentReport = async (reportId, body, userId) => {
@@ -324,7 +346,10 @@ const addAttachmentReport = async (reportId, body, userId) => {
     uploadedAt: new Date(),
   };
 
-  const updatedReport = await repository.setAttachmentReport(reportId, attachmentData);
+  const updatedReport = await repository.setAttachmentReport(
+    reportId,
+    attachmentData,
+  );
 
   if (!updatedReport) {
     throw new Error("Surat pengantar tidak ditemukan");
@@ -357,6 +382,7 @@ module.exports = {
   preparePdfData,
   preparePartialMutationData,
   addAttachmentTask,
+  removeAttachmentTask,
   addAttachmentReport,
-  PrepareVoidReport
+  PrepareVoidReport,
 };

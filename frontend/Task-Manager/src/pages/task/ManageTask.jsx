@@ -102,17 +102,36 @@ const TaskRow = ({ task, index, isExpanded, onToggle, onApprove }) => {
 
         <td className="px-4 py-4">
           <div className="flex flex-col gap-0.5">
+            <div className="flex items-center gap-2  text-[11px] font-bold whitespace-nowrap">
+              <span className="text-slate-400 w-4">T:</span>
+              <span className="text-emerald-600">
+                {task.mainData.oldlandWide || 0} m²
+              </span>
+              <span className="text-slate-400 w-4">B:</span>
+              <span className="text-emerald-600">
+                {task.mainData.oldbuildingWide || 0} m²
+              </span>
+            </div>
             <div className="flex items-center gap-2 text-[11px] font-bold whitespace-nowrap">
               <span className="text-slate-400 w-4">T:</span>
               <span className="text-slate-700">
                 {primaryData.landWide || 0} m²
               </span>
-            </div>
-            <div className="flex items-center gap-2 text-[11px] font-bold whitespace-nowrap">
               <span className="text-slate-400 w-4">B:</span>
               <span className="text-slate-600">
                 {primaryData.buildingWide || 0} m²
               </span>
+            </div>
+          </div>
+        </td>
+
+        <td className="px-4 py-4">
+          <div className="flex flex-col gap-0.5">
+            <div className="text-[13px] font-bold text-slate-700 capitalize truncate max-w-[180px] leading-none">
+              {task.mainData.subdistrict}
+            </div>
+            <div className="text-[11px] text-emerald-600 font-bold capitalize tracking-tight">
+              {task.mainData.village}
             </div>
           </div>
         </td>
@@ -144,8 +163,8 @@ const TaskRow = ({ task, index, isExpanded, onToggle, onApprove }) => {
           </div>
         </td>
 
-        <td className="px-4 py-4 text-right">
-          <div className="flex items-center justify-end gap-3 min-w-[100px]">
+        <td className="px-4 py-4 text-right relative">
+          <div className="flex items-center justify-end gap-2">
             {hasPecahan && (
               <button
                 onClick={onToggle}
@@ -156,7 +175,42 @@ const TaskRow = ({ task, index, isExpanded, onToggle, onApprove }) => {
                 />
               </button>
             )}
-            <RowActions task={task} onApprove={() => onApprove(task)} />
+
+            <div className="relative group/action flex items-center">
+              <button className="p-2 bg-white border border-slate-200 rounded-lg text-slate-500 hover:bg-slate-50 hover:border-slate-400 transition-all shadow-sm">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  strokeWidth={2}
+                  stroke="currentColor"
+                  className="w-5 h-5"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M12 6.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 12.75a.75.75 0 110-1.5.75.75 0 010 1.5zM12 18.75a.75.75 0 110-1.5.75.75 0 010 1.5z"
+                  />
+                </svg>
+              </button>
+
+              {/* Responsive Container Aksi */}
+              <div
+                className="
+                invisible opacity-0 group-hover/action:visible group-hover/action:opacity-100 transition-all duration-300 z-[100]
+                /* Mobile Default: Flowing Inline */
+                absolute top-0
+                /* Desktop (lg): Floating Absolute */
+                lg:absolute lg:left-full lg:top-0 lg:ml-7 lg:flex-col lg:mt-0
+              "
+              >
+                <div className="bg-white border border-slate-200 rounded-2xl shadow-xl lg:shadow-2xl p-2 flex flex-row lg:flex-col gap-2 min-w-fit items-center relative">
+                  {/* Panah dekoratif: Hanya terlihat di desktop */}
+                  <div className="hidden lg:block absolute top-4 -left-1.5 w-3 h-3 bg-white border-l border-b border-slate-200 rotate-45"></div>
+                  <RowActions task={task} onApprove={() => onApprove(task)} />
+                </div>
+              </div>
+            </div>
           </div>
         </td>
       </tr>
@@ -179,13 +233,10 @@ const TaskRow = ({ task, index, isExpanded, onToggle, onApprove }) => {
               <div className="text-[11px] font-bold text-slate-700 capitalize">
                 {pec.newName?.toLowerCase()}
               </div>
-              <div className="text-[10px] font-bold text-slate-500">
-                {pec.certificate}
-              </div>
             </td>
             <td className="px-4 py-3">
               <div className="text-[11px] font-bold text-emerald-700">
-                {pec.landWide} / {pec.buildingWide} m²
+                T: {pec.landWide} / B: {pec.buildingWide} m²
               </div>
             </td>
             <td
@@ -194,7 +245,9 @@ const TaskRow = ({ task, index, isExpanded, onToggle, onApprove }) => {
             >
               Status pecahan:{" "}
               <span className="font-bold text-slate-700 capitalize">
-                {pec.addStatus?.toLowerCase() || "in progress"}
+                {pec.addStatus?.toLowerCase() === "in_progress"
+                  ? "Proses"
+                  : "in progress"}
               </span>
             </td>
           </tr>
@@ -210,6 +263,7 @@ const ManageTask = () => {
     endDate: "",
     status: "",
     stage: "",
+    title: "",
   };
   const [filterDraft, setFilterDraft] = useState(initialFilters);
   const [appliedFilters, setAppliedFilters] = useState(initialFilters);
@@ -257,7 +311,7 @@ const ManageTask = () => {
 
   return (
     <DashboardLayout activeMenu="Manage Tasks">
-      <div className="max-w-[1600px] mx-auto py-8 px-6 space-y-8 animate-fadeIn">
+      <div className="max-w-[1600px] mx-auto py-8 px-6 lg:pl-6 lg:pr-24 space-y-8 animate-fadeIn">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           <div>
             <h1 className="text-3xl font-bold text-slate-800 tracking-tight flex items-center gap-4">
@@ -284,8 +338,8 @@ const ManageTask = () => {
           </button>
         </div>
 
-        <div className="bg-slate-50/50 p-6 rounded-[2rem] border border-slate-100 shadow-inner flex flex-col lg:flex-row items-end gap-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6 flex-grow w-full">
+        <div className="bg-white p-6 rounded-[2.5rem] border border-slate-200/60 shadow-sm space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
             <FilterInput
               label="Pencarian"
               name="search"
@@ -293,28 +347,44 @@ const ManageTask = () => {
               onChange={handleDraftChange}
               onKeyDown={(e) => e.key === "Enter" && handleApplyFilters()}
               icon={HiOutlineSearch}
-              placeholder="Nopel / Nama..."
+              placeholder="Cari Nopel, NOP, atau Nama..."
             />
             <FilterSelect
-              label="Status"
+              label="Jenis Layanan"
+              name="title"
+              value={filterDraft.title}
+              onChange={handleDraftChange}
+              options={[
+                { v: "Mutasi Sebagian", l: "Mutasi Sebagian" },
+                { v: "Mutasi Habis Update", l: "Mutasi Habis Update" },
+                { v: "Mutasi Habis Regular", l: "Mutasi Habis Reguler" },
+                { v: "Objek Pajak Baru", l: "Objek Pajak Baru" },
+                { v: "Pembetulan", l: "Pembetulan" },
+                { v: "Pengaktifan", l: "Pengaktifan" },
+              ]}
+            />
+            <FilterSelect
+              label="Status Berkas"
               name="status"
               value={filterDraft.status}
               onChange={handleDraftChange}
               options={[
-                { v: "proses", l: "Proses" },
-                { v: "revisi", l: "Revisi" },
-                { v: "selesai", l: "Selesai" },
-                { v: "ditolak", l: "Ditolak" },
+                { v: "proses", l: "Sedang Proses" },
+                { v: "revisi", l: "Perlu Revisi" },
+                { v: "selesai", l: "Selesai / Approved" },
+                { v: "ditolak", l: "Ditolak / Rejected" },
               ]}
             />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 items-end">
             <FilterSelect
-              label="Tahapan"
+              label="Tahapan Alur"
               name="stage"
               value={filterDraft.stage}
               onChange={handleDraftChange}
               options={[
                 { v: "diinput", l: "Diinput" },
-                { v: "ditata", l: "Ditata" },
                 { v: "diteliti", l: "Diteliti" },
                 { v: "diarsipkan", l: "Diarsipkan" },
                 { v: "dikirim", l: "Dikirim" },
@@ -323,41 +393,49 @@ const ManageTask = () => {
               ]}
             />
             <FilterInput
-              label="Mulai"
+              label="Rentang Mulai"
               name="startDate"
               type="date"
               value={filterDraft.startDate}
               onChange={handleDraftChange}
             />
             <FilterInput
-              label="Sampai"
+              label="Rentang Sampai"
               name="endDate"
               type="date"
               value={filterDraft.endDate}
               onChange={handleDraftChange}
             />
+
+            <button
+              onClick={handleApplyFilters}
+              className="h-[46px] bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-[11px] font-bold shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2 active:scale-95"
+            >
+              <HiFilter className="w-4 h-4" />
+              Terapkan Filter
+            </button>
           </div>
-          <button
-            onClick={handleApplyFilters}
-            className="w-full lg:w-auto px-8 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-[11px] font-bold shadow-lg shadow-emerald-500/20 transition-all flex items-center justify-center gap-2"
-          >
-            <HiFilter className="w-4 h-4" /> Filter
-          </button>
         </div>
 
-        <div className="bg-white rounded-[1.5rem] border border-slate-200 overflow-hidden shadow-sm">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[1000px]">
+        {/* Tabel Container: overflow-x-auto memungkinkan swipe pada layar kecil */}
+        <div className="bg-white rounded-[1.5rem] border border-slate-200 shadow-sm overflow-x-auto lg:overflow-visible">
+          <div className="min-w-[1000px] lg:min-w-full">
+            <table className="w-full text-left border-collapse table-auto">
               <thead>
                 <tr className="bg-slate-800 text-slate-200 text-[10px] font-bold tracking-wider">
-                  <th className="px-4 py-5 text-center w-12">No</th>
+                  <th className="px-4 py-5 text-center w-12 rounded-tl-[1.5rem]">
+                    No
+                  </th>
                   <th className="px-4 py-5">Tgl Masuk</th>
                   <th className="px-4 py-5">Nopel & NOP</th>
                   <th className="px-4 py-5">Nama Pemohon & Layanan</th>
-                  <th className="px-4 py-5">Luas T / B</th>
+                  <th className="px-4 py-5">Luas Tanah / Bangunan</th>
+                  <th className="px-4 py-5">Kecamatan & Desa</th>
                   <th className="px-4 py-5 text-center">Tahapan</th>
                   <th className="px-4 py-5 text-center">Status</th>
-                  <th className="px-4 py-5 text-center">Aksi</th>
+                  <th className="px-4 py-5 text-center rounded-tr-[1.5rem] w-24">
+                    Aksi
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">

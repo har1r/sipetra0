@@ -7,7 +7,6 @@ import {
   HiOutlineArrowPath,
   HiOutlinePencilSquare,
   HiOutlineTrash,
-  HiOutlineXMark,
 } from "react-icons/hi2";
 import UserContext from "../../contexts/UserContexts";
 import axiosInstance from "../../utils/axiosInstance";
@@ -52,16 +51,17 @@ const RowActions = ({ task, onApprove }) => {
     }
   };
 
+  // Menggunakan styling tombol dari kode pertama namun dengan ukuran tetap (w-10 h-10) untuk layout vertikal
   const btnBase =
-    "p-2 rounded-xl transition-all duration-200 flex items-center justify-center border shadow-sm active:scale-90";
+    "w-10 h-10 rounded-xl transition-all duration-200 flex items-center justify-center border shadow-sm active:scale-90 bg-white";
 
   return (
     <>
-      <div className="flex items-center justify-center gap-1.5 px-2">
+      <div className="flex flex-col gap-2 items-center">
         {/* --- TOMBOL LIHAT DETAIL --- */}
         <button
           onClick={() => navigate(`/task-detail/${task.id || task._id}`)}
-          className={`${btnBase} bg-white border-slate-200 text-slate-500 hover:border-slate-800 hover:text-slate-800`}
+          className={`${btnBase} border-slate-200 text-slate-500 hover:border-slate-800 hover:text-slate-800`}
           title="Lihat Detail"
         >
           <HiOutlineEye size={18} />
@@ -71,79 +71,73 @@ const RowActions = ({ task, onApprove }) => {
         {!isTerminal && canEdit && (
           <button
             onClick={() => navigate(`/task/update/${task.id || task._id}`)}
-            className={`${btnBase} bg-white border-slate-200 text-slate-500 hover:border-emerald-500 hover:text-emerald-500`}
+            className={`${btnBase} border-slate-200 text-slate-500 hover:border-emerald-500 hover:text-emerald-500`}
             title="Edit Data Berkas"
           >
             <HiOutlinePencilSquare size={18} />
           </button>
         )}
 
-        {/* --- TOMBOL TRIGGER DELETE (ADMIN) --- */}
+        {/* --- TOMBOL TRIGGER DELETE --- */}
         {isAdmin && (
           <button
             onClick={() => setShowConfirmDelete(true)}
-            className={`${btnBase} bg-white border-slate-200 text-slate-400 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-600`}
+            className={`${btnBase} border-slate-200 text-slate-400 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-600`}
             title="Hapus Permanen"
           >
             <HiOutlineTrash size={18} />
           </button>
         )}
 
-        {/* --- DIVIDER & VERIFIKASI --- */}
-        {!isTerminal && canVerify && (
-          <div className="w-[1px] h-6 bg-slate-200 mx-1" />
-        )}
-
+        {/* --- VERIFIKASI (LAYOUT VERTIKAL) --- */}
         {!isTerminal && canVerify && (
           <button
             onClick={onApprove}
-            className={`px-3 py-2 rounded-xl transition-all border flex items-center gap-2 group shadow-md active:scale-95 ${
+            className={`w-10 h-10 rounded-xl transition-all border flex items-center justify-center shadow-md active:scale-95 ${
               isRevised
                 ? "bg-amber-500 border-amber-500 text-white hover:bg-amber-600 hover:shadow-amber-200"
                 : "bg-emerald-500 border-emerald-500 text-white hover:bg-emerald-600 hover:shadow-emerald-200"
             }`}
+            title={isRevised ? "Perbaiki" : "Verifikasi"}
           >
             {isRevised ? (
               <HiOutlineArrowPath size={18} className="animate-spin-slow" />
             ) : (
               <HiOutlineCheckCircle size={18} />
             )}
-            <span className="text-[10px] font-black uppercase tracking-widest leading-none">
-              {isRevised ? "Perbaiki" : "Verifikasi"}
-            </span>
           </button>
         )}
 
-        {/* STATUS LABELS */}
+        {/* --- STATUS LABELS (VERTIKAL) --- */}
         {isFinalApproved && (
-          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-lg cursor-default">
-            <HiOutlineCheckCircle size={16} />
-            <span className="text-[9px] font-black uppercase tracking-tighter">
-              Verified
-            </span>
+          <div
+            className="flex flex-col items-center justify-center w-10 h-10 bg-emerald-50 text-emerald-600 border border-emerald-100 rounded-xl cursor-default"
+            title="Verified"
+          >
+            <HiOutlineCheckCircle size={18} />
           </div>
         )}
 
         {isFinalRejected && (
-          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 text-rose-600 border border-rose-100 rounded-lg cursor-default">
-            <HiOutlineExclamationCircle size={16} />
-            <span className="text-[9px] font-black uppercase tracking-tighter">
-              Rejected
-            </span>
+          <div
+            className="flex flex-col items-center justify-center w-10 h-10 bg-rose-50 text-rose-600 border border-rose-100 rounded-xl cursor-default"
+            title="Rejected"
+          >
+            <HiOutlineExclamationCircle size={18} />
           </div>
         )}
 
         {!isTerminal && !canVerify && (
-          <div className="flex items-center gap-1 px-3 py-1.5 bg-slate-50 text-slate-300 border border-slate-100 rounded-lg cursor-not-allowed opacity-60">
-            <div className="w-1.5 h-1.5 bg-slate-300 rounded-full animate-pulse" />
-            <span className="text-[9px] font-black uppercase tracking-tighter">
-              Waiting
-            </span>
+          <div
+            className="flex flex-col items-center justify-center w-10 h-10 bg-slate-50 text-slate-300 border border-slate-100 rounded-xl cursor-not-allowed opacity-60"
+            title="Waiting"
+          >
+            <div className="w-2 h-2 bg-slate-300 rounded-full animate-pulse" />
           </div>
         )}
       </div>
 
-      {/* --- MODAL KONFIRMASI HAPUS (POPUP TENGAH) --- */}
+      {/* --- MODAL KONFIRMASI HAPUS (Gaya Desain Kode 1) --- */}
       {showConfirmDelete && (
         <div className="fixed inset-0 z-[999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-300">
           <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-sm overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-100">
@@ -158,7 +152,7 @@ const RowActions = ({ task, onApprove }) => {
               <p className="text-sm text-slate-500 font-medium leading-relaxed mb-8 px-4">
                 Tindakan ini bersifat{" "}
                 <span className="text-rose-600 font-bold">permanen</span>. Data
-                yang dihapus tidak dapat dipulihkan kembali dari sistem.
+                yang dihapus tidak dapat dipulihkan.
               </p>
 
               <div className="flex flex-col gap-3">

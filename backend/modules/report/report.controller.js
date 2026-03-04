@@ -502,6 +502,36 @@ const addAttachmentToTasks = async (req, res) => {
   }
 };
 
+const deleteAttachmentFromTask = async (req, res) => {
+  try {
+    const user = req.user;
+    const { taskId, attachmentId } = req.params;
+
+    if (!user) return res.status(401).json({ message: "Silahkan login." });
+
+    if (!["admin", "pengarsip"].includes(user.role)) {
+      return res.status(403).json({ message: "Izin akses ditolak." });
+    }
+
+    // Memanggil Service
+    const remainingAttachments = await service.removeAttachmentTask(
+      taskId,
+      attachmentId,
+    );
+
+    return res.status(200).json({
+      message: "Lampiran berhasil dihapus",
+      data: remainingAttachments, // Mengirim daftar lampiran terbaru setelah dihapus
+    });
+  } catch (error) {
+    console.log("FULL ERROR OBJECT:", error);
+    return res.status(500).json({
+      message: error.message,
+      stack: error.stack,
+    });
+  }
+};
+
 const addAttachmentToReports = async (req, res) => {
   try {
     const user = req.user;
@@ -563,6 +593,7 @@ module.exports = {
   generateReports,
   generatePartialMutations,
   addAttachmentToTasks,
+  deleteAttachmentFromTask,
   addAttachmentToReports,
   voidReport,
 };

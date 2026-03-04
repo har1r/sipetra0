@@ -88,8 +88,8 @@ const taskSchema = new mongoose.Schema(
     },
     additionalData: [additionalDataSchema],
     attachment: {
-      type: taskAttachmentSchema,
-      default: null
+      type: [taskAttachmentSchema], // Pastikan ini Array
+      default: [],
     },
     currentStage: {
       type: String,

@@ -198,8 +198,12 @@ const ReportHistory = () => {
                     Status
                   </th>
                   <th className="px-6 py-6 text-center border-r border-white/5">
+                    Jumlah Permohonan
+                  </th>
+                  <th className="px-6 py-6 text-center border-r border-white/5">
                     Tanggal Update
                   </th>
+
                   <th className="px-8 py-6 text-right">Aksi</th>
                 </tr>
               </thead>
@@ -258,7 +262,7 @@ const ReportHistory = () => {
               <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse" />
               Total: {state.reportPagination.totalData} Laporan
             </span>
-           <Pagination
+            <Pagination
               page={state.reportPagination.currentPage}
               totalPages={state.reportPagination.totalPages}
               totalData={state.reportPagination.totalData}
@@ -275,6 +279,16 @@ const ReportHistory = () => {
           onUpdateField={actions.updateTaskAttachmentField}
           onClose={actions.closeTaskAttachmentModal}
           onSubmit={actions.submitTaskAttachment}
+          attachments={
+            state.tasks.find((t) => t._id === state.taskAttachmentForm.taskId)
+              ?.attachment || []
+          }
+          onDelete={(attachId) =>
+            actions.deleteTaskAttachment(
+              state.taskAttachmentForm.taskId,
+              attachId,
+            )
+          }
         />
 
         <AddAttachmentModal

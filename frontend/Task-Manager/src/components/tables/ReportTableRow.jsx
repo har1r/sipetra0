@@ -3,7 +3,7 @@ import {
   HiOutlinePrinter,
   HiOutlineLink,
   HiOutlineExternalLink,
-  HiOutlineTrash
+  HiOutlineTrash,
 } from "react-icons/hi";
 import { formatDateId } from "../../utils/formatDateId";
 
@@ -36,6 +36,15 @@ const ReportTableRow = ({ report, onPrint, onAddLink, onVoid }) => {
           }`}
         >
           {report.status}
+        </span>
+      </td>
+
+      <td className="px-4 py-4 text-center">
+        <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 text-[11px] font-bold ring-1 ring-inset ring-slate-200/50 shadow-sm">
+          {report.totalTasks}{" "}
+          <span className="ml-1 text-[10px] text-slate-400 font-medium">
+            Berkas
+          </span>
         </span>
       </td>
 
