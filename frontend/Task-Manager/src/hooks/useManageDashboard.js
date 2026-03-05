@@ -7,10 +7,17 @@ export const useManageDashboard = () => {
   const abortControllerRef = useRef(null);
 
   const [cardStats, setCardStats] = useState([]);
+  const [count, setCount] = useState({ totalBatch: 0, totalTasks: 0 });
   const [delayedAlerts, setDelayedAlerts] = useState({ tasks: [], count: 0 });
   // State baru untuk data grafik Bar Subdistrict
-  const [subdistrictData, setSubdistrictData] = useState({ serviceTypes: [], chartData: [] });
-  const [villageData, setVillageData] = useState({ serviceTypes: [], chartData: [] });
+  const [subdistrictData, setSubdistrictData] = useState({
+    serviceTypes: [],
+    chartData: [],
+  });
+  const [villageData, setVillageData] = useState({
+    serviceTypes: [],
+    chartData: [],
+  });
   const [isLoading, setIsLoading] = useState(true);
 
   const [filterDraft, setFilterDraft] = useState({
@@ -26,17 +33,20 @@ export const useManageDashboard = () => {
     setIsLoading(true);
     try {
       // Menjalankan ketiga fetch secara bersamaan untuk performa maksimal
-      const [cards, delayed, subdistrictChart, villageChart] = await Promise.all([
-        dashboardService.fetchDashboardCards(controller.signal),
-        dashboardService.fetchDelayedTasks(controller.signal),
-        dashboardService.fetchSubdistrictChart(controller.signal), // Fetch grafik baru
-        dashboardService.fetchVillageChart(controller.signal), // Fetch grafik baru
-      ]);
+      const [cards, delayed, subdistrictChart, villageChart, counts] =
+        await Promise.all([
+          dashboardService.fetchDashboardCards(controller.signal),
+          dashboardService.fetchDelayedTasks(controller.signal),
+          dashboardService.fetchSubdistrictChart(controller.signal), // Fetch grafik baru
+          dashboardService.fetchVillageChart(controller.signal), // Fetch grafik baru
+          dashboardService.countBatchIdAndReportedTask(controller.signal), // Fetch grafik baru
+        ]);
 
       setCardStats(cards);
       setDelayedAlerts(delayed);
       setSubdistrictData(subdistrictChart); // Update state grafik
       setVillageData(villageChart);
+      setCount(counts.result);
     } catch (err) {
       if (
         !["CanceledError", "AbortError", "ERR_CANCELED"].includes(
@@ -83,6 +93,7 @@ export const useManageDashboard = () => {
       isLoading,
       filterDraft,
       appliedFilters,
+      count,
     },
     actions,
   };

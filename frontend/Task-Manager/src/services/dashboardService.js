@@ -29,10 +29,10 @@ export const dashboardService = {
 
   fetchSubdistrictChart: async (signal) => {
     const { data } = await axiosInstance.get(
-      API_PATHS.DASHBOARD.GET_SUBDISTRICT_CHART, 
+      API_PATHS.DASHBOARD.GET_SUBDISTRICT_CHART,
       {
         signal,
-      }
+      },
     );
 
     return data.data ?? { serviceTypes: [], chartData: [] };
@@ -40,12 +40,20 @@ export const dashboardService = {
 
   fetchVillageChart: async (signal) => {
     const { data } = await axiosInstance.get(
-      API_PATHS.DASHBOARD.GET_VILLAGE_CHART, 
+      API_PATHS.DASHBOARD.GET_VILLAGE_CHART,
       {
         signal,
-      }
+      },
     );
 
     return data.data ?? { serviceTypes: [], chartData: [] };
+  },
+
+  countBatchIdAndReportedTask: async (signal) => {
+    const data = await axiosInstance.get(API_PATHS.DASHBOARD.GET_COUNT, {
+      signal,
+    });
+
+    return data.data ?? { totalBatch, totalTaks };
   },
 };

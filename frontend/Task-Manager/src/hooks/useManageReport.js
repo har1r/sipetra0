@@ -32,16 +32,16 @@ export const useManageReport = () => {
     activeSort: "terbaru",
   });
 
-  // Kode untuk tasks
+  // --- KODE UNTUK TASKS ---
   const [isExporting, setIsCreating] = useState(false);
   const [selectedIds, setSelectedIds] = useState([]);
 
   const taskFilterConfigs = [
     {
-      id: "nopel",
-      label: "Pencarian Nopel",
+      id: "search", // DIUBAH: dari nopel ke search
+      label: "Pencarian",
       icon: HiOutlineSearch,
-      placeholder: "Masukkan Nopel...",
+      placeholder: "Nopel / Judul / ID Batch...",
     },
     { id: "startDate", label: "Mulai Tanggal", type: "date" },
     { id: "endDate", label: "Sampai Tanggal", type: "date" },
@@ -57,7 +57,7 @@ export const useManageReport = () => {
   ];
 
   const [filterTaskDraft, setFilterTaskDraft] = useState({
-    nopel: "",
+    search: "", // DIUBAH: dari nopel ke search
     startDate: "",
     endDate: "",
     sortOrder: "desc",
@@ -66,6 +66,7 @@ export const useManageReport = () => {
   const [appliedTaskFilters, setAppliedTaskFilters] = useState({
     ...filterTaskDraft,
   });
+
   const [taskAttachmentForm, setTaskAttachmentForm] = useState({
     isOpen: false,
     taskId: null,
@@ -73,6 +74,7 @@ export const useManageReport = () => {
     fileName: "",
     driveLink: "",
   });
+
   const fetchVerifiedTaskDatas = useCallback(async () => {
     taskCtrlRef.current?.abort();
     const ctrl = new AbortController();
@@ -84,8 +86,9 @@ export const useManageReport = () => {
         page: taskPagination.currentPage,
         limit: 10,
         sortOrder: appliedTaskFilters.sortOrder,
-        ...(appliedTaskFilters.nopel.trim() && {
-          nopel: appliedTaskFilters.nopel.trim(),
+        // SESUAIKAN: mengirim parameter 'search' ke backend
+        ...(appliedTaskFilters.search.trim() && {
+          search: appliedTaskFilters.search.trim(),
         }),
         ...(appliedTaskFilters.startDate && {
           startDate: appliedTaskFilters.startDate,
@@ -110,14 +113,14 @@ export const useManageReport = () => {
     fetchVerifiedTaskDatas();
     return () => taskCtrlRef.current?.abort();
   }, [fetchVerifiedTaskDatas]);
-  // Kode untuk tasks
 
-  // Kode untuk reports
+  // --- KODE UNTUK REPORTS ---
   const [voidConfirm, setVoidConfirm] = useState({
     isOpen: false,
     reportId: null,
     batchId: "",
   });
+
   const [reportAttachmentForm, setReportAttachmentForm] = useState({
     isOpen: false,
     reportId: null,
@@ -125,6 +128,7 @@ export const useManageReport = () => {
     fileName: "",
     driveLink: "",
   });
+
   const reportFilterConfigs = [
     {
       id: "batchId",
@@ -162,9 +166,11 @@ export const useManageReport = () => {
     endDate: "",
     sortOrder: "desc",
   });
+
   const [appliedReportFilters, setAppliedReportFilters] = useState({
     ...filterReportDraft,
   });
+
   const fetchReportDatas = useCallback(async () => {
     reportCtrlRef.current?.abort();
     const ctrl = new AbortController();
@@ -205,17 +211,21 @@ export const useManageReport = () => {
     fetchReportDatas();
     return () => reportCtrlRef.current?.abort();
   }, [fetchReportDatas]);
-  // Kode untuk reports
 
   const actions = {
-    // Kode untuk tasks
+    // Action untuk Tasks
     setFilterTaskDraft,
     applyTaskFilter: () => {
       setAppliedTaskFilters(filterTaskDraft);
       setTaskPagination((prev) => ({ ...prev, currentPage: 1 }));
     },
     resetTaskFilter: () => {
-      const init = { nopel: "", startDate: "", endDate: "", sortOrder: "desc" };
+      const init = {
+        search: "",
+        startDate: "",
+        endDate: "",
+        sortOrder: "desc",
+      };
       setFilterTaskDraft(init);
       setAppliedTaskFilters(init);
       setTaskPagination((prev) => ({ ...prev, currentPage: 1 }));
@@ -265,7 +275,7 @@ export const useManageReport = () => {
       setTaskAttachmentForm({
         isOpen: true,
         taskId: task._id,
-        nopel: task.nopel,
+        nopel: task.mainData?.nopel || "",
         fileName: "",
         driveLink: "",
       });
@@ -279,7 +289,6 @@ export const useManageReport = () => {
     submitTaskAttachment: async (e) => {
       if (e) e.preventDefault();
       const { taskId, fileName, driveLink } = taskAttachmentForm;
-      console.log({ fileName, driveLink });
       const tid = toast.loading("Menyimpan lampiran...");
 
       try {
@@ -287,7 +296,6 @@ export const useManageReport = () => {
           fileName,
           driveLink,
         });
-        // Update state lokal
         setTasks((prev) =>
           prev.map((t) =>
             t._id === taskId ? { ...t, attachment: res.data.attachment } : t,
@@ -313,7 +321,6 @@ export const useManageReport = () => {
           taskId,
           attachmentId,
         );
-        // Update state lokal berdasarkan response controller (data: remainingAttachments)
         setTasks((prev) =>
           prev.map((t) =>
             t._id === taskId ? { ...t, attachment: res.data.data } : t,
@@ -330,13 +337,12 @@ export const useManageReport = () => {
     setTaskPage: (newPage) => {
       setTaskPagination((prev) => ({ ...prev, currentPage: newPage }));
     },
-    // Kode untuk tasks
 
-    // Kode untuk reports
+    // Action untuk Reports
     setFilterReportDraft,
     applyReportFilter: () => {
       setAppliedReportFilters(filterReportDraft);
-      setReportPagination((page) => ({ ...page, current: 1 }));
+      setReportPagination((page) => ({ ...page, currentPage: 1 }));
     },
     resetReportFilter: () => {
       const init = {
@@ -348,7 +354,7 @@ export const useManageReport = () => {
       };
       setFilterReportDraft(init);
       setAppliedReportFilters(init);
-      setReportPagination((page) => ({ ...page, current: 1 }));
+      setReportPagination((page) => ({ ...page, currentPage: 1 }));
     },
     printReport: async (id) => {
       const tid = toast.loading("Membuka dokumen...");
@@ -377,6 +383,7 @@ export const useManageReport = () => {
 
     updateReportAttachmentField: (name, value) =>
       setReportAttachmentForm((p) => ({ ...p, [name]: value })),
+
     submitReportAttachment: async (e) => {
       if (e) e.preventDefault();
       const { reportId, fileName, driveLink } = reportAttachmentForm;
@@ -387,7 +394,6 @@ export const useManageReport = () => {
           fileName,
           driveLink,
         });
-        // Update state lokal
         setReports((prev) =>
           prev.map((r) =>
             r._id === reportId ? { ...r, attachment: res.data.attachment } : r,
@@ -405,6 +411,7 @@ export const useManageReport = () => {
         toast.error(err.response?.data?.message || "Gagal simpan", { id: tid });
       }
     },
+
     setReportPage: (newPage) => {
       setReportPagination((prev) => ({ ...prev, currentPage: newPage }));
     },
@@ -437,12 +444,10 @@ export const useManageReport = () => {
         return false;
       }
     },
-    // Kode untuk reports
   };
 
   return {
     state: {
-      // Kode untuk tasks
       tasks,
       isTaskLoading,
       isExporting,
@@ -451,9 +456,6 @@ export const useManageReport = () => {
       taskFilterConfigs,
       filterTaskDraft,
       taskAttachmentForm,
-      // Kode untuk tasks
-
-      // Kode untuk reports
       reports,
       isReportLoading,
       reportPagination,
@@ -461,8 +463,6 @@ export const useManageReport = () => {
       filterReportDraft,
       reportAttachmentForm,
       voidConfirm,
-
-      // Kode untuk reports
     },
     actions,
   };

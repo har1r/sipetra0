@@ -42,7 +42,7 @@ const getSubdistrictBarChart = async (req, res) => {
     res.status(200).json({
       success: true,
       message: "Statistik layanan per kecamatan berhasil diambil",
-      data: data
+      data: data,
     });
   } catch (error) {
     console.log("FULL ERROR OBJECT:", error);
@@ -60,7 +60,7 @@ const getVillageBarChart = async (req, res) => {
     res.status(200).json({
       success: true,
       message: "Statistik layanan per desa/kelurahan berhasil diambil",
-      data: data
+      data: data,
     });
   } catch (error) {
     console.log("FULL ERROR OBJECT:", error);
@@ -71,4 +71,27 @@ const getVillageBarChart = async (req, res) => {
   }
 };
 
-module.exports = { getCardTasks, getDelayedTasks, getSubdistrictBarChart, getVillageBarChart };
+const getCountBatchIdAndReportedTasks = async (req, res) => {
+  try {
+    const result = await service.getcountTotalTaskReported();
+    console.log("hasil:", { result });
+
+    return res.status(200).json({
+      message: "Statistik berhasil dimuat",
+      result: result.data,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      status: "error",
+      message: error.message,
+    });
+  }
+};
+
+module.exports = {
+  getCardTasks,
+  getDelayedTasks,
+  getSubdistrictBarChart,
+  getVillageBarChart,
+  getCountBatchIdAndReportedTasks,
+};

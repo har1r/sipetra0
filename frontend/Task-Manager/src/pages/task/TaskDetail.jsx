@@ -151,10 +151,9 @@ const TaskDetail = () => {
     return () => abortRef.current?.abort();
   }, [id]);
 
-  console.log("Fetched Task Detail:", task);
-
   const renderDetails = useMemo(() => {
     if (!task) return null;
+    console.log({ task });
     return {
       title: task.title || "",
       mainData: task.mainData || {},
@@ -311,6 +310,9 @@ const TaskDetail = () => {
                   <InfoRow label="Luas Bangunan Lama">
                     {renderDetails.mainData.oldbuildingWide} m²
                   </InfoRow>
+                  <InfoRow label="Catatan Umum">
+                    {renderDetails.globalNote}
+                  </InfoRow>
                 </div>
               </SectionCard>
 
@@ -347,6 +349,9 @@ const TaskDetail = () => {
                             {item.buildingWide} m²
                           </InfoRow>
                         </div>
+                      </div>
+                      <div>
+                        <InfoRow label="Catatan Khusus">{item.note}</InfoRow>
                       </div>
                     </div>
                   ))}

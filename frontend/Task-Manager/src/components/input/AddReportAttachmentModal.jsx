@@ -13,7 +13,6 @@ const AddAttachmentModal = ({
   onUpdateField,
   onClose,
   onSubmit,
-  // Tambahkan props ini untuk menangani list dan delete
   attachments = [],
   onDelete,
   title = "Lampiran Berkas",
@@ -21,10 +20,12 @@ const AddAttachmentModal = ({
   if (!isOpen) return null;
 
   return (
+    // Backdrop tetap menutupi layar, items-center memastikan posisi tengah
     <div className="fixed inset-0 z-[99] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
-      <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-md overflow-hidden border border-slate-100 flex flex-col max-h-[90vh]">
-        {/* Header */}
-        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+      {/* Modal Container: Ditambahkan 'my-auto' dan limit max-h yang lebih kecil dari viewport */}
+      <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-md overflow-hidden border border-slate-100 flex flex-col max-h-[calc(100vh-10rem)] my-auto">
+        {/* Header - Shrink-0 agar tidak mengecil saat list banyak */}
+        <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 shrink-0">
           <div>
             <h3 className="text-lg font-bold text-slate-800">{title}</h3>
             <p className="text-[10px] text-slate-400 font-medium tracking-tight">
@@ -39,7 +40,7 @@ const AddAttachmentModal = ({
           </button>
         </div>
 
-        {/* Content - Scrollable */}
+        {/* Content - Scrollable tetap berfungsi di sini */}
         <div className="overflow-y-auto p-6 space-y-6 custom-scrollbar">
           {/* Form Section */}
           <form onSubmit={onSubmit} className="space-y-4">
@@ -146,8 +147,8 @@ const AddAttachmentModal = ({
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="p-4 bg-slate-50/50 border-t border-slate-100 text-center">
+        {/* Footer - Shrink-0 agar tidak terpotong */}
+        <div className="p-4 bg-slate-50/50 border-t border-slate-100 text-center shrink-0">
           <p className="text-[9px] text-slate-400 font-bold uppercase tracking-widest">
             Sistem Pengarsipan Digital
           </p>

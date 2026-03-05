@@ -3,20 +3,13 @@ const Report = require("../../models/Report");
 
 // Fungsi untuk getVerifiedTasks
 const findVerifiedTasks = async ({ filters, sortDirection, skip, limit }) => {
-  const [totalResult, tasks] = await Promise.all([
-    Task.aggregate([
-      { $match: filters }, // Terapkan filter yang sama
-      {
-        $group: {
-          _id: null,
-          totalBerkas: {
-            $sum: { $size: { $ifNull: ["$additionalData", []] } },
-          },
-        },
-      },
-    ]),
+  const [totalData, tasks] = await Promise.all([
+    Task.countDocuments(filters),
     Task.find(filters)
-      .sort({ updatedAt: sortDirection })
+      .sort({
+        reportId: sortDirection, // ID null akan dikelompokkan bersama
+        updatedAt: -1,
+      })
       .skip(skip)
       .limit(limit)
       .populate({
@@ -26,8 +19,6 @@ const findVerifiedTasks = async ({ filters, sortDirection, skip, limit }) => {
       .select("title mainData additionalData attachment updatedAt reportId")
       .lean(),
   ]);
-
-  const totalData = totalResult.length > 0 ? totalResult[0].totalBerkas : 0;
 
   return { totalData, tasks };
 };

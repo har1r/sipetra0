@@ -1,4 +1,5 @@
 const Task = require("../../models/Task");
+const Report = require("../../models/Report");
 
 const findStatsTitleCard = async () => {
   return await Task.aggregate([
@@ -71,7 +72,6 @@ const findSubdistrictForChart = async () => {
   ]);
 };
 
-// repositories/taskRepository.js
 const findVillageForChart = async () => {
   return await Task.aggregate([
     {
@@ -98,9 +98,41 @@ const findVillageForChart = async () => {
     },
   ]);
 };
+
+const countTotalTaskReported = async () => {
+  const result = await Report.aggregate([
+    { $match: { status: { $ne: "VOID" } } },
+
+    {
+      $group: {
+        _id: null,
+        totalBatch: { $sum: 1 },
+        totalTasks: {
+          $sum: {
+            $cond: {
+              if: { $isArray: "$tasks" },
+              then: { $size: "$tasks" },
+              else: 0,
+            },
+          },
+        },
+      },
+    },
+    {
+      $project: {
+        _id: 0,
+        totalBatch: 1,
+        totalTasks: 1,
+      },
+    },
+  ]);
+
+  return result[0] || { totalBatch: 0, totalTasks: 0 };
+};
 module.exports = {
   findStatsTitleCard,
   findDelayedTasks,
   findSubdistrictForChart,
   findVillageForChart,
+  countTotalTaskReported,
 };

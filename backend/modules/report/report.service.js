@@ -1,9 +1,10 @@
 const repository = require("../report/report.repository");
 const { formatDateId } = require("../../utils/formatDateId");
+const mongoose = require("mongoose");
 
 // Fungsi untuk getVerifiedTasks
 const getVerifiedTasksService = async (queryParams) => {
-  const { nopel, startDate, endDate, sortOrder = "desc" } = queryParams;
+  const { search, startDate, endDate, sortOrder = "desc" } = queryParams;
 
   const page = Math.max(1, parseInt(queryParams.page)) || 1;
   const limit = Math.min(100, Math.max(1, parseInt(queryParams.limit))) || 10;
@@ -13,9 +14,25 @@ const getVerifiedTasksService = async (queryParams) => {
     currentStage: { $in: ["diarsipkan", "dikirim", "diperiksa", "selesai"] },
   };
 
-  if (nopel) {
-    const safeNopel = nopel.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    filters["mainData.nopel"] = { $regex: safeNopel, $options: "i" };
+  if (search) {
+    const safeSearch = search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const regex = { $regex: safeSearch, $options: "i" };
+
+    const matchingReports = await mongoose
+      .model("Report")
+      .find({
+        batchId: regex,
+      })
+      .select("_id")
+      .lean();
+    const reportIds = matchingReports.map((r) => r._id);
+
+    filters.$or = [
+      { "mainData.nopel": regex },
+      { "additionalData.newName": regex },
+      { title: regex },
+      { reportId: { $in: reportIds } },
+    ];
   }
 
   if (startDate || endDate) {

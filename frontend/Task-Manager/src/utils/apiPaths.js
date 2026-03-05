@@ -56,5 +56,6 @@ export const API_PATHS = {
     GET_DELAYED_TASKS: "/api/dashboard/get-delayed-task",
     GET_SUBDISTRICT_CHART: "/api/dashboard/get-subdistrict-chart",
     GET_VILLAGE_CHART: "/api/dashboard/get-village-chart",
+    GET_COUNT: "/api/dashboard/get-count-batcId-reported-task",
   },
 };

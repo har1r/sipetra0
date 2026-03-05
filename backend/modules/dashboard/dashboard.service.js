@@ -124,9 +124,21 @@ const villageStatsForBarChart = async () => {
   };
 };
 
+const getcountTotalTaskReported = async () => {
+  const stats = await repository.countTotalTaskReported();
+
+  return {
+    data: {
+      totalBatch: stats.totalBatch,
+      totalTasks: stats.totalTasks,
+    },
+  };
+};
+
 module.exports = {
   getTaskSummaryCards,
   getTasksPendingMoreThanTwoWeeks,
   subdistrictStatsForBarChart,
   villageStatsForBarChart,
+  getcountTotalTaskReported,
 };

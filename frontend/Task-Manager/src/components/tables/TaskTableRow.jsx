@@ -8,7 +8,7 @@ import { FaSquareCheck, FaRegSquare } from "react-icons/fa6";
 import { formatDateId } from "../../utils/formatDateId";
 
 const TaskTableRow = ({ task, isSelected, onSelect, onPrint, onAddLink }) => {
-  const hasAttachment = !!task.attachment;
+  const hasAttachment = task.attachment.length > 0;
 
   const renderBatchStatus = () => {
     if (task.reportId) {
