@@ -2,7 +2,7 @@ const Task = require("../../models/Task");
 
 const buildTaskQuery = (filters) => {
   const query = {};
-  const { search, title, currentStage, status, startDate, endDate } = filters;
+  const { search, title, stage, status, startDate, endDate } = filters;
 
   if (search) {
     const searchRegex = { $regex: String(search).trim(), $options: "i" };
@@ -14,7 +14,7 @@ const buildTaskQuery = (filters) => {
       { "additionalData.newName": searchRegex },
     ];
   }
-  if (currentStage) query.currentStage = currentStage;
+  if (stage) query.currentStage = stage;
   if (title) query.title = title;
 
   if (status) {
