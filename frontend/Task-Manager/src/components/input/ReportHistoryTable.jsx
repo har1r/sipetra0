@@ -8,7 +8,7 @@ import React, {
 import axiosInstance from "../../utils/axiosInstance";
 import { API_PATHS } from "../../utils/apiPaths";
 import { formatDateId } from "../../utils/formatDateId";
-import { FaLink, FaFileInvoice, FaFolderOpen } from "react-icons/fa";
+import { FaLink, FaFileInvoice, FaFolderOpen, FaFileExcel } from "react-icons/fa";
 import {
   HiOutlineSearch,
   HiOutlineInbox,
@@ -91,7 +91,7 @@ const ReportHistoryTable = forwardRef(({ onPrint }, ref) => {
 
   // --- REQ 2 & 3: GET BY ID & GENERATE PDF ---
   const handleDownloadPDF = async (reportId) => {
-    const toastId = toast.loading("Menyiapkan dokumen PDF...");
+    const toastId = toast.loading("Mengunduh dokumen PDF...");
     try {
       const response = await axiosInstance.post(
         API_PATHS.REPORTS.GENERATE_REPORT(reportId),
@@ -112,13 +112,58 @@ const ReportHistoryTable = forwardRef(({ onPrint }, ref) => {
 
       const file = new Blob([response.data], { type: "application/pdf" });
       const fileURL = URL.createObjectURL(file);
-      window.open(fileURL, "_blank");
+      const link = document.createElement("a");
+      link.href = fileURL;
+      link.setAttribute("download", `Laporan_Batch_${reportId}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
 
-      toast.success("PDF berhasil dibuka!", { id: toastId });
+      toast.success("PDF berhasil diunduh!", { id: toastId });
       setTimeout(() => URL.revokeObjectURL(fileURL), 100);
     } catch (err) {
       console.error("Print Error:", err);
-      toast.error(err.message || "Gagal mencetak PDF.", { id: toastId });
+      toast.error(err.message || "Gagal mengunduh PDF.", { id: toastId });
+    }
+  };
+
+  const handleDownloadExcel = async (reportId, batchId) => {
+    const toastId = toast.loading("Mengunduh dokumen Excel...");
+    try {
+      const response = await axiosInstance.post(
+        API_PATHS.REPORTS.GENERATE_EXCEL_REPORT(reportId),
+        {},
+        {
+          responseType: "blob",
+          headers: {
+            Accept: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          },
+        },
+      );
+
+      if (response.data.type === "application/json") {
+        const text = await response.data.text();
+        const errorData = JSON.parse(text);
+        throw new Error(errorData.message);
+      }
+
+      const file = new Blob([response.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const fileURL = URL.createObjectURL(file);
+      const link = document.createElement("a");
+      link.href = fileURL;
+      const safeBatchId = batchId.replace(/[\/\\?%*:|"<>]/g, "_");
+      link.setAttribute("download", `surat_pengantar_${safeBatchId}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+
+      toast.success("Excel berhasil diunduh!", { id: toastId });
+      setTimeout(() => URL.revokeObjectURL(fileURL), 100);
+    } catch (err) {
+      console.error("Excel Download Error:", err);
+      toast.error(err.message || "Gagal mengunduh Excel.", { id: toastId });
     }
   };
 
@@ -335,6 +380,19 @@ const ReportHistoryTable = forwardRef(({ onPrint }, ref) => {
                           title="Cetak PDF"
                         >
                           <HiOutlinePrinter size={16} />
+                        </button>
+
+                        <button
+                          disabled={report.status === "VOID"}
+                          onClick={() => handleDownloadExcel(report._id, report.batchId)}
+                          className={`p-2.5 rounded-xl border transition-all active:scale-90 ${
+                            report.status === "VOID"
+                              ? "bg-slate-50 text-slate-300 border-slate-100 cursor-not-allowed"
+                              : "bg-teal-50 text-teal-600 border-teal-100 hover:bg-teal-600 hover:text-white hover:shadow-md"
+                          }`}
+                          title="Unduh Excel"
+                        >
+                          <FaFileExcel size={16} />
                         </button>
 
                         <button

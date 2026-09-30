@@ -5,11 +5,13 @@ const {
   getReports,
   createReports,
   generateReports,
+  generateExcelReports,
   generatePartialMutations,
   addAttachmentToTasks,
   deleteAttachmentFromTask,
   addAttachmentToReports,
   voidReport,
+  getReportKpiStats,
 } = require("../modules/report/report.controller");
 const {
   // createReport,
@@ -27,6 +29,7 @@ const router = express.Router();
 // Tambahkan route sesuai kontroller
 router.post("/create-report", protect, createReports);
 router.post("/generate-report/:reportId", protect, generateReports);
+router.post("/generate-excel-report/:reportId", protect, generateExcelReports);
 router.post(
   "/generate-partial-mutation/:taskId",
   protect,
@@ -34,6 +37,8 @@ router.post(
 );
 router.get("/get-verified-tasks", protect, getVerifiedTasks);
 router.get("/get-reports", protect, getReports);
+router.get("/kpi-stats", protect, getReportKpiStats);
+
 router.post("/add-attachment-to-task/:taskId", protect, addAttachmentToTasks);
 router.post(
   "/delete-attachment-to-task/:taskId/attachments/:attachmentId",

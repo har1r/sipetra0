@@ -20,6 +20,15 @@ export const reportService = {
     return res.data;
   },
 
+  getKpiStats: async (params, signal) => {
+    const res = await axiosInstance.get(API_PATHS.REPORTS.GET_KPI_STATS, {
+      params,
+      signal,
+    });
+
+    return res.data;
+  },
+
   createBatch: async (selectedIds) => {
     return await axiosInstance.post(API_PATHS.REPORTS.CREATE_REPORT, {
       selectedTaskIds: selectedIds,
@@ -52,6 +61,20 @@ export const reportService = {
       API_PATHS.REPORTS.GENERATE_REPORT(reportId),
       {},
       { responseType: "blob", headers: { Accept: "application/pdf" } },
+    );
+  },
+
+  generateExcelReport: async (reportId) => {
+    return await axiosInstance.post(
+      API_PATHS.REPORTS.GENERATE_EXCEL_REPORT(reportId),
+      {},
+      {
+        responseType: "blob",
+        headers: {
+          Accept:
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        },
+      },
     );
   },
 

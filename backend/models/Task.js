@@ -151,6 +151,7 @@ taskSchema.index({ "mainData.nop": 1 });
 taskSchema.index({ overallStatus: 1 });
 taskSchema.index({ currentStage: 1 });
 taskSchema.index({ reportId: 1 });
+taskSchema.index({ reportId: 1, title: 1 });
 
 // 3. Compound Index untuk Sort & Filter (Sangat Penting untuk getAllTasks)
 // Karena getAllTasks sering melakukan filter status/stage sambil mengurutkan berdasarkan tanggal terbaru

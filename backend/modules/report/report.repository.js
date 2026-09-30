@@ -34,7 +34,7 @@ const findAllReports = async ({ filters, sortDirection, skip, limit }) => {
       .limit(limit)
       .populate({
         path: "tasks",
-        select: "additionalData",
+        select: "additionalData title",
       })
       .populate({
         path: "generatedBy",
@@ -84,6 +84,18 @@ const getReportForPdf = async (reportId) => {
     .lean();
 };
 // Fungsi untuk generateReport
+
+const getReportForExcel = async (reportId) => {
+  return await Report.findById(reportId)
+    .populate({
+      path: "tasks",
+      populate: {
+        path: "createdBy",
+        select: "name",
+      },
+    })
+    .lean();
+};
 
 // Fungsi untuk generatePartialMutations
 const findTaskById = async (taskId) => {
@@ -146,6 +158,30 @@ const detachTasksFromReport = async (reportId) => {
   );
 };
 
+const aggregateKpiStats = async (matchFilter) => {
+  return await Task.aggregate([
+    { $match: matchFilter },
+    {
+      $group: {
+        _id: "$title",
+        totalPecahan: {
+          $sum: {
+            $cond: {
+              if: { $isArray: "$additionalData" },
+              then: { $size: "$additionalData" },
+              else: 1,
+            },
+          },
+        },
+        totalPermohonan: { $sum: 1 },
+      },
+    },
+    {
+      $sort: { totalPecahan: -1 },
+    },
+  ]);
+};
+
 module.exports = {
   findVerifiedTasks,
   findAllReports,
@@ -154,6 +190,7 @@ module.exports = {
   createReportDocument,
   updateTasksReportReference,
   getReportForPdf,
+  getReportForExcel,
   findTaskById,
   setAttachmentTask,
   removeAttachmentFromTask,
@@ -161,4 +198,6 @@ module.exports = {
   findReportById,
   updateReportStatus,
   detachTasksFromReport,
+  aggregateKpiStats,
 };
+

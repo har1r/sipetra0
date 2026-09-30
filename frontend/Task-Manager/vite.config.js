@@ -33,12 +33,15 @@ export default defineConfig({
 
   // 🌐 Server dev config
   server: {
+    host: "0.0.0.0",
     port: 5173,
-    open: true, // otomatis buka browser
-    strictPort: true, // error langsung jika port dipakai
-    cors: true, // izinkan akses lintas domain
+    open: false,
+    strictPort: true,
+    cors: true,
+    allowedHosts: true,
+
     hmr: {
-      overlay: true, // tampilkan error overlay di browser
+      overlay: true,
     },
   },
 

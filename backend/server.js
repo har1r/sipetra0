@@ -64,11 +64,19 @@ app.use((error, req, res, next) => {
 
 /**
  * 5. Server Listener
+ * - Di local development: jalankan server seperti biasa
+ * - Di Vercel serverless: export app sebagai handler (Vercel yang handle listening)
  */
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(
-    `✅ Server berjalan di mode ${process.env.NODE_ENV || "production"}`,
-  );
-  console.log(`🚀 URL: http://localhost:${PORT}`);
-});
+if (require.main === module) {
+  // Dijalankan langsung (node server.js atau nodemon)
+  const PORT = process.env.PORT || 5000;
+  app.listen(PORT, () => {
+    console.log(
+      `✅ Server berjalan di mode ${process.env.NODE_ENV || "production"}`,
+    );
+    console.log(`🚀 URL: http://localhost:${PORT}`);
+  });
+}
+
+// Export untuk Vercel Serverless Function
+module.exports = app;

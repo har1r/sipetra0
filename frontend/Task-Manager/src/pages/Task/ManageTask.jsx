@@ -357,7 +357,7 @@ const ManageTask = () => {
               options={[
                 { v: "Mutasi Sebagian", l: "Mutasi Sebagian" },
                 { v: "Mutasi Habis Update", l: "Mutasi Habis Update" },
-                { v: "Mutasi Habis Regular", l: "Mutasi Habis Reguler" },
+                { v: "Mutasi Habis Reguler", l: "Mutasi Habis Reguler" },
                 { v: "Objek Pajak Baru", l: "Objek Pajak Baru" },
                 { v: "Pembetulan", l: "Pembetulan" },
                 { v: "Pengaktifan", l: "Pengaktifan" },

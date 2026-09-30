@@ -1,6 +1,7 @@
 const PDFDocument = require("pdfkit");
 const path = require("path");
 const service = require("../report/report.service");
+const ExcelJS = require("exceljs");
 
 const getVerifiedTasks = async (req, res, next) => {
   try {
@@ -19,7 +20,6 @@ const getVerifiedTasks = async (req, res, next) => {
 const getReports = async (req, res, next) => {
   try {
     const result = await service.getAllReportsService(req.query);
-
     return res.status(200).json({ result });
   } catch (error) {
     console.log("FULL ERROR OBJECT:", error);
@@ -259,7 +259,7 @@ const generateReports = async (req, res, next) => {
         if (h > maxHeight) maxHeight = h;
       });
 
-      if (yPos + maxHeight > 550) {
+      if (yPos + maxHeight > 540) {
         doc.addPage({ size: "A4", layout: "landscape", margin: 20 });
         yPos = 20;
         let xHeader = 20;
@@ -289,18 +289,20 @@ const generateReports = async (req, res, next) => {
         });
         xCell += colWidths[i];
       });
-      return maxHeight;
+      return yPos + maxHeight;
     };
 
     let currentY = doc.y;
-    currentY += drawTableRow(headers, currentY, true);
+    currentY = drawTableRow(headers, currentY, true);
 
     tableRows.forEach((row) => {
-      currentY += drawTableRow(row, currentY, false);
+      currentY = drawTableRow(row, currentY, false);
     });
 
-    if (currentY + 100 > 550)
+    if (currentY + 100 > 540) {
       doc.addPage({ size: "A4", layout: "landscape", margin: 20 });
+      currentY = 20;
+    }
     drawSignature(doc, 600, currentY + 20, 200);
 
     doc.end();
@@ -362,8 +364,25 @@ const generatePartialMutations = async (req, res, next) => {
 
     let currentY = doc.y;
 
+    const drawTableHeader = (y) => {
+      doc.font("Helvetica-Bold").fontSize(9);
+      let hX = startX;
+      ["Keterangan", "NOP", "Nama WP", "LT", "LB"].forEach((h, i) => {
+        doc.rect(hX, y, colWidths[i], rowHeight).stroke();
+        doc.text(h, hX, y + 6, { width: colWidths[i], align: "center" });
+        hX += colWidths[i];
+      });
+    };
+
     // Helper: Draw Row
     const drawRow = (label, nop, wp, lt, lb, isBold = false) => {
+      if (currentY + rowHeight > 750) {
+        doc.addPage({ size: "A4", margin: 40 });
+        currentY = 40;
+        drawTableHeader(currentY);
+        currentY += rowHeight;
+      }
+
       let x = startX;
       const data = [label, nop, wp, lt, lb];
 
@@ -401,13 +420,7 @@ const generatePartialMutations = async (req, res, next) => {
     };
 
     // Draw Table Header
-    doc.font("Helvetica-Bold").fontSize(9);
-    let hX = startX;
-    ["Keterangan", "NOP", "Nama WP", "LT", "LB"].forEach((h, i) => {
-      doc.rect(hX, currentY, colWidths[i], rowHeight).stroke();
-      doc.text(h, hX, currentY + 6, { width: colWidths[i], align: "center" });
-      hX += colWidths[i];
-    });
+    drawTableHeader(currentY);
     currentY += rowHeight;
 
     // 1. Baris NOP Induk (Sisa Tanah)
@@ -435,8 +448,13 @@ const generatePartialMutations = async (req, res, next) => {
       drawRow("Pecahan 1 *)", "", "", "", "");
     }
 
+    // Pengecekan sisa halaman untuk Kotak Koordinat & Tanda Tangan (~280px)
+    if (currentY + 280 > 750) {
+      doc.addPage({ size: "A4", margin: 40 });
+      currentY = 40;
+    }
+
     // Koordinat Box
-    doc.moveDown(1);
     doc
       .font("Helvetica-Bold")
       .fontSize(10)
@@ -457,11 +475,11 @@ const generatePartialMutations = async (req, res, next) => {
       },
     );
 
-    doc.moveDown(5);
+    currentY += 65;
     doc
       .font("Helvetica-Oblique")
       .fontSize(7)
-      .text("*) Diisi oleh petugas di Bidang", startX);
+      .text("*) Diisi oleh petugas di Bidang", startX, currentY + 10);
 
     doc.end();
   } catch (error) {
@@ -586,14 +604,297 @@ const voidReport = async (req, res) => {
   }
 };
 
+const parseNop = (nop = "") => {
+  if (!nop) nop = "";
+  const clean = nop.replace(/\D/g, "");
+  if (clean.length === 18) {
+    return {
+      prov: clean.substring(0, 2),
+      kab: clean.substring(2, 4),
+      kec: clean.substring(4, 7),
+      kel: clean.substring(7, 10),
+      blok: clean.substring(10, 13),
+      urut: clean.substring(13, 17),
+      status: clean.substring(17, 18)
+    };
+  }
+  const parts = nop.trim().split(/[\s\.-]+/);
+  if (parts.length >= 7) {
+    return {
+      prov: parts[0],
+      kab: parts[1],
+      kec: parts[2],
+      kel: parts[3],
+      blok: parts[4],
+      urut: parts[5],
+      status: parts[6]
+    };
+  }
+  return {
+    prov: nop,
+    kab: "",
+    kec: "",
+    kel: "",
+    blok: "",
+    urut: "",
+    status: ""
+  };
+};
+
+const parseAddress = (fullAddress = "") => {
+  if (!fullAddress) fullAddress = "";
+  const rtMatch = fullAddress.match(/rt\s*[:\.-]?\s*(\d+)/i);
+  const rwMatch = fullAddress.match(/rw\s*[:\.-]?\s*(\d+)/i);
+  const rt = rtMatch ? rtMatch[1].padStart(3, "0") : "";
+  const rw = rwMatch ? rwMatch[1].padStart(3, "0") : "";
+  
+  let cleanAddress = fullAddress
+    .replace(/(?:rt\s*[:\.-]?\s*\d+)/gi, "")
+    .replace(/(?:rw\s*[:\.-]?\s*\d+)/gi, "")
+    .replace(/[\/\s-,]+$/, "")
+    .replace(/[\/\s-,]+/g, " ")
+    .trim();
+    
+  return { rt, rw, cleanAddress };
+};
+
+const parseCertificate = (certificate = "") => {
+  if (!certificate) certificate = "";
+  const trimmed = certificate.trim();
+  if (!trimmed) return { jenis: "", no: "" };
+  
+  const match = trimmed.match(/^([a-zA-Z]+)\s+(.+)$/);
+  if (match) {
+    return {
+      jenis: match[1],
+      no: match[2]
+    };
+  }
+  return { jenis: trimmed, no: "" };
+};
+
+const toUpperStr = (val) => {
+  if (val === undefined || val === null) return "";
+  return String(val).toUpperCase();
+};
+
+const toNumberVal = (val) => {
+  if (val === undefined || val === null || val === "") return 0;
+  const num = Number(val);
+  return isNaN(num) ? 0 : num;
+};
+
+const generateExcelReports = async (req, res, next) => {
+  try {
+    const { reportId } = req.params;
+    const user = req.user;
+
+    if (!user) return res.status(401).json({ message: "Silahkan login." });
+
+    const { report, tasks } = await service.prepareExcelData(reportId);
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet("Detail Surat Pengantar");
+
+    // Define column mapping keys and width
+    worksheet.columns = [
+      { key: "nopel", width: 25 },
+      { key: "nop_prov", width: 5 },
+      { key: "nop_kab", width: 5 },
+      { key: "nop_kec", width: 7 },
+      { key: "nop_kel", width: 7 },
+      { key: "nop_blok", width: 7 },
+      { key: "nop_urut", width: 9 },
+      { key: "nop_status", width: 5 },
+      { key: "newName", width: 25 },
+      { key: "oldName", width: 25 },
+      { key: "address", width: 35 },
+      { key: "blok", width: 8 },
+      { key: "rt", width: 6 },
+      { key: "rw", width: 6 },
+      { key: "subdistrict", width: 20 },
+      { key: "village", width: 20 },
+      { key: "title", width: 20 },
+      { key: "landWide", width: 12 },
+      { key: "buildingWide", width: 12 },
+      { key: "cert_jenis", width: 10 },
+      { key: "cert_no", width: 20 },
+    ];
+
+    // Row 1: Header Utama
+    const row1Values = [];
+    row1Values[1] = "NO PELAYANAN";
+    row1Values[2] = "NOP INDUK";
+    row1Values[9] = "NAMA PEMOHON";
+    row1Values[10] = "NAMA WP INDUK";
+    row1Values[11] = "LOKASI OBJEK PAJAK";
+    row1Values[17] = "JENIS PELAYANAN";
+    row1Values[18] = "LUAS";
+    row1Values[20] = "ALAS HAK";
+    worksheet.addRow(row1Values);
+
+    // Row 2: Sub Header
+    const row2Values = [];
+    row2Values[2] = "";
+    row2Values[3] = "";
+    row2Values[4] = "";
+    row2Values[5] = "";
+    row2Values[6] = "";
+    row2Values[7] = "";
+    row2Values[8] = "";
+    row2Values[11] = "ALAMAT OP";
+    row2Values[12] = "BLOK";
+    row2Values[13] = "RT";
+    row2Values[14] = "RW";
+    row2Values[15] = "KECAMATAN";
+    row2Values[16] = "DESA/KEL";
+    row2Values[18] = "TANAH";
+    row2Values[19] = "BANGUNAN";
+    row2Values[20] = "JENIS";
+    row2Values[21] = "NO";
+    worksheet.addRow(row2Values);
+
+    // Merge Header Cells
+    worksheet.mergeCells("A1:A2");
+    worksheet.mergeCells("B1:H1");
+    worksheet.mergeCells("I1:I2");
+    worksheet.mergeCells("J1:J2");
+    worksheet.mergeCells("K1:P1");
+    worksheet.mergeCells("Q1:Q2");
+    worksheet.mergeCells("R1:S1");
+    worksheet.mergeCells("T1:U1");
+
+    // Add Data Rows
+    tasks.forEach((task) => {
+      const adds = task.additionalData && task.additionalData.length > 0 ? task.additionalData : [{}];
+      
+      adds.forEach((addData) => {
+        const nopParts = parseNop(task.mainData?.nop);
+        const addrInfo = parseAddress(task.mainData?.address);
+        const certInfo = parseCertificate(addData.certificate);
+
+        worksheet.addRow({
+          nopel: toUpperStr(task.mainData?.nopel),
+          nop_prov: toUpperStr(nopParts.prov),
+          nop_kab: toUpperStr(nopParts.kab),
+          nop_kec: toUpperStr(nopParts.kec),
+          nop_kel: toUpperStr(nopParts.kel),
+          nop_blok: toUpperStr(nopParts.blok),
+          nop_urut: toUpperStr(nopParts.urut),
+          nop_status: toUpperStr(nopParts.status),
+          newName: toUpperStr(addData.newName),
+          oldName: toUpperStr(task.mainData?.oldName),
+          address: toUpperStr(addrInfo.cleanAddress),
+          blok: "", // Kosongkan sesuai template
+          rt: toUpperStr(addrInfo.rt),
+          rw: toUpperStr(addrInfo.rw),
+          subdistrict: toUpperStr(task.mainData?.subdistrict),
+          village: toUpperStr(task.mainData?.village),
+          title: toUpperStr(task.title),
+          landWide: toNumberVal(addData.landWide),
+          buildingWide: toNumberVal(addData.buildingWide),
+          cert_jenis: toUpperStr(certInfo.jenis),
+          cert_no: toUpperStr(certInfo.no),
+        });
+      });
+    });
+
+    // Style the sheet, headers, grid lines and borders
+    worksheet.views = [{ showGridLines: true }];
+    worksheet.getRow(1).height = 24;
+    worksheet.getRow(2).height = 20;
+
+    worksheet.eachRow({ includeEmpty: true }, (row, rowNumber) => {
+      row.eachCell({ includeEmpty: true }, (cell) => {
+        if (rowNumber <= 2) {
+          // Headers
+          cell.font = { name: "Arial", size: 9, bold: true, color: { argb: "000000" } };
+          cell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "46C0D2" }
+          };
+          cell.border = {
+            top: { style: "thin", color: { argb: "000000" } },
+            left: { style: "thin", color: { argb: "000000" } },
+            bottom: { style: "thin", color: { argb: "000000" } },
+            right: { style: "thin", color: { argb: "000000" } }
+          };
+          cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+        } else {
+          // Data
+          cell.font = { name: "Arial", size: 9, color: { argb: "000000" } };
+          cell.border = {
+            top: { style: "thin", color: { argb: "9CA3AF" } },
+            left: { style: "thin", color: { argb: "9CA3AF" } },
+            bottom: { style: "thin", color: { argb: "9CA3AF" } },
+            right: { style: "thin", color: { argb: "9CA3AF" } }
+          };
+          
+          const colIndex = cell.col;
+          if (
+            (colIndex >= 2 && colIndex <= 8) ||
+            colIndex === 12 || // BLOK
+            colIndex === 13 || // RT
+            colIndex === 14 || // RW
+            colIndex === 18 || // Luas Tanah
+            colIndex === 19    // Luas Bangunan
+          ) {
+            cell.alignment = { vertical: "middle", horizontal: "center" };
+          } else {
+            cell.alignment = { vertical: "middle", horizontal: "left" };
+          }
+        }
+      });
+    });
+
+    // Format safe batch name for the filename
+    const safeBatchId = report.batchId.replace(/[\/\\?%*:|"<>]/g, "_");
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename=surat_pengantar_${safeBatchId}.xlsx`
+    );
+
+    await workbook.xlsx.write(res);
+    res.end();
+  } catch (error) {
+    console.log("FULL ERROR OBJECT:", error);
+    return res.status(500).json({
+      message: error.message,
+      stack: error.stack,
+    });
+  }
+};
+
+const getReportKpiStats = async (req, res, next) => {
+  try {
+    const result = await service.getReportKpiStatsService(req.query);
+    return res.status(200).json({ result });
+  } catch (error) {
+    console.log("FULL ERROR OBJECT:", error);
+    return res.status(500).json({
+      message: error.message,
+      stack: error.stack,
+    });
+  }
+};
+
 module.exports = {
   getVerifiedTasks,
   getReports,
   createReports,
   generateReports,
+  generateExcelReports,
   generatePartialMutations,
   addAttachmentToTasks,
   deleteAttachmentFromTask,
   addAttachmentToReports,
   voidReport,
+  getReportKpiStats,
 };
+

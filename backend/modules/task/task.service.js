@@ -23,6 +23,8 @@ const getTasksService = async (filters, pagination, user) => {
     limit,
   );
 
+  console.log(filters);
+
   const role = String(user.role || "").toLowerCase();
   const isAdmin = role === "admin";
 

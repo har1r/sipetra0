@@ -1,5 +1,5 @@
-// Alamat URL Utama
-export const BASE_URL = "https://f998hms6-8000.asse.devtunnels.ms/";
+// Alamat URL Utama — gunakan env variable agar fleksibel di semua environment
+export const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000/";
 
 /**
  * === 🛠️ API PATHS REGISTRY ===
@@ -37,10 +37,13 @@ export const API_PATHS = {
   REPORTS: {
     CREATE_REPORT: "/api/reports/create-report",
     GENERATE_REPORT: (reportId) => `/api/reports/generate-report/${reportId}`,
+    GENERATE_EXCEL_REPORT: (reportId) =>
+      `/api/reports/generate-excel-report/${reportId}`,
     GENERATE_PARTIAL_MUTATION: (taskId) =>
       `/api/reports/generate-partial-mutation/${taskId}`,
     GET_VERIFIED_TASKS: "/api/reports/get-verified-tasks",
     GET_REPORTS: "/api/reports/get-reports",
+    GET_KPI_STATS: "/api/reports/kpi-stats",
     VOID_REPORT: (reportId) => `/api/reports/void-report/${reportId}`,
 
     ADD_ATTACHMENT_TO_TASK: (taskId) =>

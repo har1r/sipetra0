@@ -1,22 +1,9 @@
 const multer = require("multer");
 const path = require("path");
-const fs = require("fs");
 
-const uploadDir = "uploads/";
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir);
-}
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    // Gunakan nama asli yang dibersihkan agar metadata di Drive tetap rapi
-    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
-    cb(null, "temp-" + uniqueSuffix + path.extname(file.originalname));
-  },
-});
+// Gunakan memoryStorage agar kompatibel dengan Vercel serverless
+// (filesystem Vercel bersifat read-only dan ephemeral)
+const storage = multer.memoryStorage();
 
 const fileFilter = (req, file, cb) => {
   // Untuk Report/Batch, biasanya kita hanya butuh PDF

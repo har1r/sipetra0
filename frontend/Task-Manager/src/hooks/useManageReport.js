@@ -6,9 +6,16 @@ import { HiOutlineSearch } from "react-icons/hi";
 export const useManageReport = () => {
   const taskCtrlRef = useRef(null);
   const reportCtrlRef = useRef(null);
+  const kpiStatsCtrlRef = useRef(null);
 
   const [tasks, setTasks] = useState([]);
   const [reports, setReports] = useState([]);
+
+  const [kpiStats, setKpiStats] = useState({
+    summary: { totalPecahan: 0, totalPermohonan: 0 },
+    byServiceType: [],
+  });
+  const [isKpiLoading, setIsKpiLoading] = useState(false);
 
   const [isTaskLoading, setIsTaskLoading] = useState(false);
   const [isReportLoading, setIsReportLoading] = useState(false);
@@ -114,6 +121,40 @@ export const useManageReport = () => {
     return () => taskCtrlRef.current?.abort();
   }, [fetchVerifiedTaskDatas]);
 
+  const fetchKpiStats = useCallback(async () => {
+    kpiStatsCtrlRef.current?.abort();
+    const ctrl = new AbortController();
+    kpiStatsCtrlRef.current = ctrl;
+
+    setIsKpiLoading(true);
+    try {
+      const params = {
+        ...(appliedTaskFilters.startDate && {
+          startDate: appliedTaskFilters.startDate,
+        }),
+        ...(appliedTaskFilters.endDate && {
+          endDate: appliedTaskFilters.endDate,
+        }),
+      };
+
+      const data = await reportService.getKpiStats(params, ctrl.signal);
+      if (data?.result) {
+        setKpiStats(data.result);
+      }
+    } catch (err) {
+      if (err?.name !== "CanceledError") {
+        console.error("Gagal mengambil statistik KPI:", err);
+      }
+    } finally {
+      setIsKpiLoading(false);
+    }
+  }, [appliedTaskFilters.startDate, appliedTaskFilters.endDate]);
+
+  useEffect(() => {
+    fetchKpiStats();
+    return () => kpiStatsCtrlRef.current?.abort();
+  }, [fetchKpiStats]);
+
   // --- KODE UNTUK REPORTS ---
   const [voidConfirm, setVoidConfirm] = useState({
     isOpen: false,
@@ -199,6 +240,7 @@ export const useManageReport = () => {
       const data = await reportService.getReports(params, ctrl.signal);
 
       setReports(data?.result?.reports || []);
+      console.log(data?.result?.reports);
       setReportPagination(data?.result?.pagination);
     } catch (err) {
       if (err?.name !== "CanceledError") toast.error("Gagal sinkronisasi data");
@@ -252,6 +294,7 @@ export const useManageReport = () => {
         setSelectedIds([]);
         fetchVerifiedTaskDatas();
         fetchReportDatas();
+        fetchKpiStats();
       } catch (err) {
         toast.error(err.response?.data?.message || "Gagal", { id: tid });
       } finally {
@@ -259,14 +302,19 @@ export const useManageReport = () => {
       }
     },
     printPartial: async (id) => {
-      const tid = toast.loading("Membuka dokumen...");
+      const tid = toast.loading("Mengunduh dokumen...");
       try {
         const res = await reportService.generatePartialMutation(id);
         const url = URL.createObjectURL(
           new Blob([res.data], { type: "application/pdf" }),
         );
-        window.open(url, "_blank");
-        toast.success("Berhasil", { id: tid });
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", `Mutasi_Sebagian_${id}.pdf`);
+        document.body.appendChild(link);
+        link.click();
+        link.parentNode.removeChild(link);
+        toast.success("Berhasil diunduh", { id: tid });
       } catch (err) {
         toast.error("Gagal cetak", { id: tid });
       }
@@ -357,16 +405,42 @@ export const useManageReport = () => {
       setReportPagination((page) => ({ ...page, currentPage: 1 }));
     },
     printReport: async (id) => {
-      const tid = toast.loading("Membuka dokumen...");
+      const tid = toast.loading("Mengunduh dokumen...");
       try {
         const res = await reportService.generateReport(id);
         const url = URL.createObjectURL(
           new Blob([res.data], { type: "application/pdf" }),
         );
-        window.open(url, "_blank");
-        toast.success("Berhasil", { id: tid });
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", `Laporan_Kolektif_${id}.pdf`);
+        document.body.appendChild(link);
+        link.click();
+        link.parentNode.removeChild(link);
+        toast.success("Berhasil diunduh", { id: tid });
       } catch (err) {
         toast.error("Gagal cetak", { id: tid });
+      }
+    },
+    exportExcelReport: async (id, batchId) => {
+      const tid = toast.loading("Mengunduh dokumen Excel...");
+      try {
+        const res = await reportService.generateExcelReport(id);
+        const url = URL.createObjectURL(
+          new Blob([res.data], {
+            type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+          }),
+        );
+        const link = document.createElement("a");
+        link.href = url;
+        const safeBatchId = batchId.replace(/[\/\\?%*:|"<>]/g, "_");
+        link.setAttribute("download", `surat_pengantar_${safeBatchId}.xlsx`);
+        document.body.appendChild(link);
+        link.click();
+        link.parentNode.removeChild(link);
+        toast.success("Excel berhasil diunduh!", { id: tid });
+      } catch (err) {
+        toast.error("Gagal mengunduh Excel.", { id: tid });
       }
     },
     openReportAttachmentModal: (report) => {
@@ -436,6 +510,7 @@ export const useManageReport = () => {
 
         fetchReportDatas();
         fetchVerifiedTaskDatas();
+        fetchKpiStats();
 
         actions.closeVoidModal();
         return true;
@@ -463,7 +538,12 @@ export const useManageReport = () => {
       filterReportDraft,
       reportAttachmentForm,
       voidConfirm,
+      kpiStats,
+      isKpiLoading,
     },
-    actions,
+    actions: {
+      ...actions,
+      fetchKpiStats,
+    },
   };
 };

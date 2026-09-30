@@ -3,6 +3,7 @@ const PDFDocument = require("pdfkit");
 const Task = require("../models/Task");
 const Report = require("../models/Report");
 const path = require("path");
+const { title } = require("process");
 const LOGO_PATH = path.resolve(__dirname, "./assets/logo-kab.png");
 
 const fmtDateID = (d = new Date()) =>
@@ -356,7 +357,7 @@ const generateReport = async (req, res) => {
       });
 
       // Proteksi pindah halaman jika tidak cukup ruang
-      if (yPos + maxHeight > 550) {
+      if (yPos + maxHeight > 540) {
         doc.addPage({ size: "A4", layout: "landscape", margin: 20 });
         yPos = 20;
         // Gambar header lagi di halaman baru
@@ -388,21 +389,23 @@ const generateReport = async (req, res) => {
         xCell += colWidths[i];
       });
 
-      return maxHeight;
+      return yPos + maxHeight;
     };
 
     // Header Tabel Lampiran
     let currentY = doc.y;
-    currentY += drawTableRow(headers, currentY, true);
+    currentY = drawTableRow(headers, currentY, true);
 
     // Isi Tabel Lampiran
     rows.forEach((row) => {
-      currentY += drawTableRow(row, currentY, false);
+      currentY = drawTableRow(row, currentY, false);
     });
 
     // 8. TANDA TANGAN LAMPIRAN
-    if (currentY + 100 > 550)
+    if (currentY + 100 > 540) {
       doc.addPage({ size: "A4", layout: "landscape", margin: 20 });
+      currentY = 20;
+    }
     drawSignature(doc, 600, currentY + 20, 200);
 
     doc.end();
@@ -492,6 +495,13 @@ const generatePartialMutation = async (req, res) => {
     let currentY = tableTop + rowHeight;
 
     const drawRow = (label, nop, wp, lt, lb, isBold = false) => {
+      if (currentY + rowHeight > 750) {
+        doc.addPage({ size: "A4", margin: 40 });
+        currentY = 40;
+        drawHeader(currentY);
+        currentY += rowHeight;
+      }
+
       let x = 40;
       const data = [label, nop, wp, lt, lb];
 
@@ -580,7 +590,12 @@ const generatePartialMutation = async (req, res) => {
       drawRow("Pecahan 1 *)", "", "", "", "");
     }
 
-    doc.moveDown(1);
+    // Pengecekan sisa halaman untuk Kotak Koordinat & Tanda Tangan (~280px)
+    if (currentY + 280 > 750) {
+      doc.addPage({ size: "A4", margin: 40 });
+      currentY = 40;
+    }
+
     doc.font("Helvetica-Bold").text("Titik Koordinat:", 40, currentY + 10);
     doc.rect(40, currentY + 25, 515, 200).stroke();
 
@@ -604,11 +619,11 @@ const generatePartialMutation = async (req, res) => {
       footerX += footerWidth;
     });
 
-    doc.moveDown(5);
+    currentY += 65;
     doc
       .font("Helvetica-Oblique")
       .fontSize(7)
-      .text("*) Diisi oleh petugas di Bidang", 40);
+      .text("*) Diisi oleh petugas di Bidang", 40, currentY + 10);
 
     // Selesaikan Dokumen
     doc.end();
@@ -835,6 +850,7 @@ const getReports = async (req, res) => {
 
       return {
         _id: report._id,
+        title: report.tasks?.[0]?.title || "Laporan Tanpa Judul",
         batchId: report.batchId,
         tanggalCetak: report.createdAt,
         admin: report.generatedBy?.name || "Sistem",

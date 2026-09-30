@@ -143,6 +143,7 @@ const getAllReportsService = async (queryParams) => {
     const { tasks, generatedBy, ...reportData } = report;
     return {
       ...reportData,
+      title: tasks?.[0]?.title || "Laporan Tanpa Judul",
       generatedByName: generatedBy?.name || "Unknown",
       totalTasks: totalAdditionalEntries,
     };
@@ -392,14 +393,103 @@ const PrepareVoidReport = async (reportId) => {
   return { reportId };
 };
 
+const prepareExcelData = async (reportId) => {
+  const report = await repository.getReportForExcel(reportId);
+  if (!report) throw new Error("Surat pengantar tidak ditemukan");
+
+  return {
+    report,
+    tasks: report.tasks || [],
+  };
+};
+
+const getReportKpiStatsService = async (queryParams = {}) => {
+  const { startDate, endDate } = queryParams;
+
+  const matchFilter = {
+    reportId: { $ne: null },
+  };
+
+  if (startDate || endDate) {
+    matchFilter.updatedAt = {};
+    if (startDate) {
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      matchFilter.updatedAt.$gte = start;
+    }
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      matchFilter.updatedAt.$lte = end;
+    }
+    if (Object.keys(matchFilter.updatedAt).length === 0) {
+      delete matchFilter.updatedAt;
+    }
+  }
+
+  const rawStats = await repository.aggregateKpiStats(matchFilter);
+
+  const statsMap = new Map();
+  let totalAllPecahan = 0;
+  let totalAllPermohonan = 0;
+
+  for (let i = 0; i < rawStats.length; i++) {
+    const item = rawStats[i];
+    statsMap.set(item._id, {
+      totalPecahan: item.totalPecahan || 0,
+      totalPermohonan: item.totalPermohonan || 0,
+    });
+    totalAllPecahan += item.totalPecahan || 0;
+    totalAllPermohonan += item.totalPermohonan || 0;
+  }
+
+  const CANONICAL_SERVICE_TYPES = [
+    "Mutasi Sebagian",
+    "Mutasi Habis Reguler",
+    "Mutasi Habis Update",
+    "Pembetulan",
+    "Objek Pajak Baru",
+    "Pengaktifan",
+  ];
+
+  const byServiceType = CANONICAL_SERVICE_TYPES.map((type) => {
+    const existing = statsMap.get(type);
+    statsMap.delete(type);
+    return {
+      serviceType: type,
+      totalPecahan: existing ? existing.totalPecahan : 0,
+      totalPermohonan: existing ? existing.totalPermohonan : 0,
+    };
+  });
+
+  for (const [type, data] of statsMap.entries()) {
+    byServiceType.push({
+      serviceType: type || "Lainnya",
+      totalPecahan: data.totalPecahan,
+      totalPermohonan: data.totalPermohonan,
+    });
+  }
+
+  return {
+    summary: {
+      totalPecahan: totalAllPecahan,
+      totalPermohonan: totalAllPermohonan,
+    },
+    byServiceType,
+  };
+};
+
 module.exports = {
   getVerifiedTasksService,
   getAllReportsService,
   processCreateReport,
   preparePdfData,
+  prepareExcelData,
   preparePartialMutationData,
   addAttachmentTask,
   removeAttachmentTask,
   addAttachmentReport,
   PrepareVoidReport,
+  getReportKpiStatsService,
 };
+

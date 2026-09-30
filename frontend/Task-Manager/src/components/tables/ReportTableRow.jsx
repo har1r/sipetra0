@@ -5,9 +5,10 @@ import {
   HiOutlineExternalLink,
   HiOutlineTrash,
 } from "react-icons/hi";
+import { FaFileExcel } from "react-icons/fa";
 import { formatDateId } from "../../utils/formatDateId";
 
-const ReportTableRow = ({ report, onPrint, onAddLink, onVoid }) => {
+const ReportTableRow = ({ report, onPrint, onExportExcel, onAddLink, onVoid }) => {
   const hasAttachment = !!report.attachment;
 
   return (
@@ -41,6 +42,12 @@ const ReportTableRow = ({ report, onPrint, onAddLink, onVoid }) => {
 
       <td className="px-4 py-4 text-center">
         <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 text-[11px] font-bold ring-1 ring-inset ring-slate-200/50 shadow-sm">
+          {report.title}
+        </span>
+      </td>
+
+      <td className="px-4 py-4 text-center">
+        <span className="inline-flex items-center justify-center px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 text-[11px] font-bold ring-1 ring-inset ring-slate-200/50 shadow-sm">
           {report.totalTasks}{" "}
           <span className="ml-1 text-[10px] text-slate-400 font-medium">
             Berkas
@@ -61,6 +68,19 @@ const ReportTableRow = ({ report, onPrint, onAddLink, onVoid }) => {
             className="p-2 rounded-xl bg-slate-50 text-slate-600 border border-slate-200 hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition-all shadow-sm active:scale-90"
           >
             <HiOutlinePrinter size={14} />
+          </button>
+
+          <button
+            onClick={onExportExcel}
+            disabled={report.status === "VOID"}
+            className={`p-2 rounded-xl transition-all shadow-sm active:scale-90 border ${
+              report.status === "VOID"
+                ? "bg-slate-100 text-slate-400 cursor-not-allowed border-slate-200"
+                : "bg-slate-50 text-slate-600 border border-slate-200 hover:bg-emerald-600 hover:text-white hover:border-emerald-600"
+            }`}
+            title="Ekspor Excel"
+          >
+            <FaFileExcel size={14} />
           </button>
 
           <button

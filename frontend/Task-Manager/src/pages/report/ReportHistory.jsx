@@ -15,6 +15,7 @@ import ReportTableRow from "../../components/tables/ReportTableRow";
 import FilterSection from "../../components/filters/FilterSection";
 import AddAttachmentModal from "../../components/input/AddReportAttachmentModal";
 import VoidConfirmationModal from "../../components/modals/VoidConfirmationModal";
+import ReportKpiStats from "../../components/cards/ReportKpiStats";
 
 const ReportHistory = () => {
   const { state, actions } = useManageReport();
@@ -57,6 +58,12 @@ const ReportHistory = () => {
             </button>
           </div>
         </div>
+
+        {/* KPI Statistics Section */}
+        <ReportKpiStats
+          kpiStats={state.kpiStats}
+          isLoading={state.isKpiLoading}
+        />
 
         {/* Filter Section - Komponen Refactor */}
         <FilterSection
@@ -192,10 +199,13 @@ const ReportHistory = () => {
               <thead className="bg-gradient-to-r from-slate-800 to-indigo-950 text-slate-200 text-[10px] font-bold tracking-wider uppercase">
                 <tr>
                   <th className="px-8 py-6 border-r border-white/5">
-                    Detail Batch & Admin
+                    Detail Pengantar
                   </th>
                   <th className="px-6 py-6 text-center border-r border-white/5">
                     Status
+                  </th>
+                  <th className="px-6 py-6 text-center border-r border-white/5">
+                    Jenis Layanan
                   </th>
                   <th className="px-6 py-6 text-center border-r border-white/5">
                     Jumlah Permohonan
@@ -226,6 +236,9 @@ const ReportHistory = () => {
                       key={report._id}
                       report={report}
                       onPrint={() => actions.printReport(report._id)}
+                      onExportExcel={() =>
+                        actions.exportExcelReport(report._id, report.batchId)
+                      }
                       onAddLink={() =>
                         actions.openReportAttachmentModal(report)
                       }
